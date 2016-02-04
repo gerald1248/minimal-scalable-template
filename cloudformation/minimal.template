@@ -73,7 +73,7 @@
             {
                "Description" : "URL for 'latest' Git revision",
                "Type" : "String",
-               "Default" : "https://git@bitbucket.org/gerald1248/minimal-scalable-template.git"
+               "Default" : "https://github.com/gerald1248/minimal-scalable-template.git"
             }
       },
    "Mappings" :
