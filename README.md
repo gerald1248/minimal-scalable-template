@@ -64,7 +64,7 @@ If you wish to use the bastion server as a jump host to the private subnets, che
 
 Couldn't you have used (Go|Java|Node.js|Python|Ruby)?
 -----------------------------------------------------
-Yes, absolutely. It's probably a good next step. The idea was that most people have a strong preference when it comes to scripting languages, but everyone uses Bash to some extent. It's not usually what we hope to see, but it's never entirely out of place either. A thoroughly tested deployment script in a language would be a great addition.
+Yes, absolutely. It's probably a good next step. The idea was that most people have a strong preference when it comes to scripting languages, but everyone uses Bash to some extent. It's not usually what we hope to see, but it's never entirely out of place either. A thoroughly tested deployment script in a high-level language would be a great addition.
 
 Why didn't you include AMIs for other regions?
 ----------------------------------------------
