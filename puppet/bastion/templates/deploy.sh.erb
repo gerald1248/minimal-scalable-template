@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+# minimal deployment script
+# swaps active and passive autoscaling groups
+# expects AWS config to set 'output' to 'text'
+
+# see /etc/facter/facts.d/aws-ids.txt
+id1=<%= @auto_scaling_group1 %>
+id2=<%= @auto_scaling_group2 %>
+elb=<%= @elastic_load_balancer %>
+
+maxattempts=10
+sleep_interval=90
+
+group1count=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group $id1|grep -c "^INSTANCES.*InService")
+group2count=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group $id2|grep -c "^INSTANCES.*InService")
+
+if [ $group1count -eq 0 ] && [ $group2count -eq 0 ]; then
+  echo "$0: both groups passive - exiting early"
+  exit 1
+fi
+
+if [ $group1count -ge $group2count ]; then
+  activeid=$id1; passiveid=$id2; activecount=$group1count
+else
+  activeid=$id2; passiveid=$id1; activecount=$group2count
+fi
+
+activedescription=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group $activeid)
+maxcount=$(echo $activedescription|awk '{print $10}')
+
+echo "$0: updating $passiveid min: $activecount max: $maxcount desired: $activecount"
+aws autoscaling update-auto-scaling-group --auto-scaling-group $passiveid --min-size $activecount --max-size $maxcount --desired-capacity $activecount
+
+for (( i=0; i<$maxattempts; i++ )); do
+  echo "$0: pausing $sleep_interval seconds"
+  sleep $sleep_interval
+  # NB don't trust the autoscaling group's health indicator
+  newcount=$(aws elb describe-instance-health --load-balancer-name $elb | grep -c "^INSTANCES.*InService")
+  echo "$0: $newcount instances in service in passive group"
+  if [ $newcount -ge $activecount ]; then
+    echo "$0: reducing $activeid to min: 0 max: 0 desired: 0"
+    aws autoscaling update-auto-scaling-group --auto-scaling-group $activeid --min-size 0 --max-size 0 --desired-capacity 0
+    echo "$0: done"
+    exit 0
+  fi
+done
+
+echo "$0: unsuccessful after $maxattempts attempts"
+exit 1
