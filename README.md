@@ -13,7 +13,7 @@ What does it look like?
 
 How do I get started?
 ---------------------
-If you have an AWS account, a Route 53 hosted zone and a key pair, you are ready to go. Choose `Create a Stack` on the Cloud Formation welcome page. Under `Choose a template`, select `Upload a template to S3` and pick the file `minimal.template` from the [cloudformation](cloudformation) folder of this repo. Press `Next` to go to the parameter screen, where you can keep the defaults but need to supply:
+If you have an AWS account, a Route 53 hosted zone and a key pair, you are ready to go. Choose `Create a Stack` on the CloudFormation welcome page. Under `Choose a template`, select `Upload a template to S3` and pick the file `minimal.template` from the [cloudformation](cloudformation) folder of this repo. Press `Next` to go to the parameter screen, where you can keep the defaults but need to supply:
 
 * stack name (e.g. stack01)
 * Route 53 hosted zone (e.g. example.com.)
@@ -31,7 +31,11 @@ Note that the template creates IAM users for the bastion and application hosts. 
 
 I've got the stack. Where's the application?
 ------------------------------------------------
-The load balancer URL (along with the bastion host's CNAME and other useful strings) is available from the Outputs panel of the CloudFormation console.
+The load balancer URL (along with the bastion host's CNAME and other useful strings) is available from the Outputs panel of the CloudFormation console. 
+
+You can also construct it as follows:
+
+    http://[stack name].[region].[hosted zone]
 
 The application is of course a stub and bound to disappoint fans of elaborate web design.
 
