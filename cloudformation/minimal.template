@@ -1334,7 +1334,7 @@
                                     {
                                        "Ref" : "AWS::StackName"
                                     },
-                                    "-elb.",
+                                    ".",
                                     {
                                        "Ref" : "AWS::Region"
                                     },
@@ -1665,7 +1665,7 @@
                               {
                                  "Ref" : "AWS::StackName"
                               },
-                              "-elb.",
+                              ".",
                               {
                                  "Ref" : "AWS::Region"
                               },
