@@ -6,7 +6,7 @@
             {
                "Description" : "Maximum number of application servers",
                "Type" : "Number",
-               "Default" : "4",
+               "Default" : "1",
                "MinValue" : "1",
                "MaxValue" : "16",
                "ConstraintDescription" : "Must be between 1 and 16"
@@ -19,6 +19,14 @@
                "MinValue" : "1",
                "MaxValue" : "8",
                "ConstraintDescription" : "Must be between 1 and 8"
+            },
+         "BastionIngressCidrIp" :
+            {
+               "Description" : "CIDR block for SSH access to bastion host",
+               "Type" : "String",
+               "Default" : "0.0.0.0/0",
+               "AllowedPattern" : "^([0-9]+\\.){3}[0-9]+/[0-9]+$",
+               "ConstraintDescription" : "Should be as narrow as possible"
             },
          "DnsHostedZone" :
             {
@@ -730,6 +738,7 @@
                                           "#!/usr/bin/env bash\n",
                                           "yum -y install git\n",
                                           "yum -y install puppet3\n",
+                                          "pip install boto3\n",
                                           "[ -d /etc/facter/facts.d ] || mkdir -p /etc/facter/facts.d\n",
                                           "cat > /etc/facter/facts.d/stack_ids.txt <<EOT\n",
                                           "auto_scaling_group1=",
@@ -757,7 +766,7 @@
                                           "cp -R /home/ec2-user/git/minimal/puppet/bastion /etc/puppet/modules/\n",
                                           "puppet apply -e 'include bastion::install'\n",
                                           "[ -d /home/ec2-user/.aws ] || mkdir -p /home/ec2-user/.aws\n",
-                                          "cat > /home/ec2-user/.aws/config <<EOT\n",
+                                          "cat > /home/ec2-user/.aws/credentials <<EOT\n",
                                           "[default]\n",
                                           "aws_access_key_id = ",
                                           {
@@ -773,14 +782,18 @@
                                                 ]
                                           },
                                           "\n",
+                                          "EOT\n",
+                                          "cat > /home/ec2-user/.aws/config <<EOT\n",
+                                          "[default]\n",
                                           "region = ",
                                           {
                                              "Ref" : "AWS::Region"
                                           },
                                           "\n",
-                                          "output = text\n",
+                                          "output = json\n",
                                           "EOT\n",
                                           "chown ec2-user /home/ec2-user/.aws\n",
+                                          "chown ec2-user /home/ec2-user/.aws/credentials\n",
                                           "chown ec2-user /home/ec2-user/.aws/config\n",
                                           ". /etc/profile.d/aws-apitools-common.sh\n"
                                        ]
@@ -1011,7 +1024,7 @@
                                           "cp -R /home/ec2-user/git/minimal/puppet/application /etc/puppet/modules/\n",
                                           "puppet apply -e 'include application::install'\n",
                                           "mkdir -p /home/ec2-user/.aws\n",
-                                          "cat > /home/ec2-user/.aws/config <<EOT\n",
+                                          "cat > /home/ec2-user/.aws/credentials <<EOT\n",
                                           "[default]\n",
                                           "aws_access_key_id = ",
                                           {
@@ -1027,14 +1040,18 @@
                                                 ]
                                           },
                                           "\n",
+                                          "EOT\n",
+                                          "cat > /home/ec2-user/.aws/config <<EOT\n",
+                                          "[default]\n",
                                           "region = ",
                                           {
                                              "Ref" : "AWS::Region"
                                           },
                                           "\n",
-                                          "output = text\n",
+                                          "output = json\n",
                                           "EOT\n",
                                           "chown ec2-user /home/ec2-user/.aws\n",
+                                          "chown ec2-user /home/ec2-user/.aws/credentials\n",
                                           "chown ec2-user /home/ec2-user/.aws/config\n",
                                           ". /etc/profile.d/aws-apitools-common.sh\n"
                                        ]
@@ -1059,7 +1076,10 @@
                               "IpProtocol" : "tcp",
                               "FromPort" : "22",
                               "ToPort" : "22",
-                              "CidrIp" : "0.0.0.0/0"
+                              "CidrIp" :
+                                 {
+                                    "Ref" : "BastionIngressCidrIp"
+                                 }
                            }
                         ],
                      "SecurityGroupEgress" :
