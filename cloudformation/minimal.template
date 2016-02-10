@@ -789,7 +789,7 @@
                                              "Ref" : "AWS::Region"
                                           },
                                           "\n",
-                                          "output = json\n",
+                                          "output = text\n",
                                           "EOT\n",
                                           "chown ec2-user /home/ec2-user/.aws\n",
                                           "chown ec2-user /home/ec2-user/.aws/credentials\n",
@@ -1044,7 +1044,7 @@
                                              "Ref" : "AWS::Region"
                                           },
                                           "\n",
-                                          "output = json\n",
+                                          "output = text\n",
                                           "EOT\n",
                                           "chown ec2-user /home/ec2-user/.aws\n",
                                           "chown ec2-user /home/ec2-user/.aws/credentials\n",
