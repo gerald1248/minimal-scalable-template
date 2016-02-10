@@ -22,11 +22,10 @@
             },
          "BastionIngressCidrIp" :
             {
-               "Description" : "CIDR block for SSH access to bastion host",
+               "Description" : "CIDR range for SSH access to bastion host",
                "Type" : "String",
                "Default" : "0.0.0.0/0",
-               "AllowedPattern" : "^([0-9]+\\.){3}[0-9]+/[0-9]+$",
-               "ConstraintDescription" : "Should be as narrow as possible"
+               "ConstraintDescription" : "CIDR range should be as narrow as possible"
             },
          "DnsHostedZone" :
             {
@@ -821,9 +820,6 @@
                                  [
                                     {
                                        "Ref" : "SecurityGroupPublicSSH"
-                                    },
-                                    {
-                                       "Ref" : "SecurityGroupPublicHTTPS"
                                     }
                                  ],
                               "AssociatePublicIpAddress" : "true"
@@ -1080,34 +1076,6 @@
                                  {
                                     "Ref" : "BastionIngressCidrIp"
                                  }
-                           }
-                        ],
-                     "SecurityGroupEgress" :
-                        [
-                           {
-                              "IpProtocol" : "-1",
-                              "CidrIp" : "0.0.0.0/0"
-                           }
-                        ]
-                  }
-            },
-         "SecurityGroupPublicHTTPS" :
-            {
-               "Type" : "AWS::EC2::SecurityGroup",
-               "Properties" :
-                  {
-                     "GroupDescription" : "Accessible via HTTPS",
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "SecurityGroupIngress" :
-                        [
-                           {
-                              "IpProtocol" : "tcp",
-                              "FromPort" : "8443",
-                              "ToPort" : "8443",
-                              "CidrIp" : "0.0.0.0/0"
                            }
                         ],
                      "SecurityGroupEgress" :
