@@ -10,7 +10,7 @@ class bastion::install {
   file { '/home/ec2-user/scripts':
     ensure => directory,
   } ->
-  file { '/home/ec2-user/scripts/stack_ids.json':
+  file { '/home/ec2-user/stack_ids.json':
     ensure  => file,
     owner   => 'ec2-user',
     mode    => '0644',

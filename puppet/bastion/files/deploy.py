@@ -125,8 +125,10 @@ if __name__ == "__main__":
     max_attempts -= 1
     if max_attempts == 0:
       print sys.argv[0] + " timed out"
+      group_update(passive_id, 0, 0, 0)
       system.exit(2)
     sleep(interval)
     healthy_instances = elb_instance_count(elb)
 
+  group_update(active_id, 0, 0, 0)
   print sys.argv[0] + " successful"
