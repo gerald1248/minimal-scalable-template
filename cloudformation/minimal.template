@@ -56,6 +56,18 @@
                   ],
                "ConstraintDescription" : "Must be true or false"
             },
+         "GitCloneBranch" :
+            {
+               "Description" : "Git Branch",
+               "Type" : "String",
+               "Default" : "master"
+            },
+         "GitCloneUrl" :
+            {
+               "Description" : "URL for Git repo",
+               "Type" : "String",
+               "Default" : "https://github.com/gerald1248/minimal-scalable-template.git"
+            },
          "InstancePerformance" :
             {
                "Description" : "Toggle for default or low performance",
@@ -75,12 +87,6 @@
                "Description" : "TCP/IP port of the web server",
                "Type" : "String",
                "Default" : "80"
-            },
-         "GitCloneUrl" :
-            {
-               "Description" : "URL for 'latest' Git revision",
-               "Type" : "String",
-               "Default" : "https://github.com/gerald1248/minimal-scalable-template.git"
             }
       },
    "Mappings" :
@@ -757,7 +763,11 @@
                                           "\n",
                                           "EOT\n",
                                           "[ -d /home/ec2-user/git ] || mkdir /home/ec2-user/git\n",
-                                          "git clone --depth 1 ",
+                                          "git clone -b ",
+                                          {
+                                             "Ref" : "GitCloneBranch"
+                                          },
+                                          " ",
                                           {
                                              "Ref" : "GitCloneUrl"
                                           },
@@ -1012,7 +1022,11 @@
                                           "yum -y install httpd\n",
                                           "service httpd start\n",
                                           "[ -d /home/ec2-user/git ] || mkdir /home/ec2-user/git\n",
-                                          "git clone --depth 1 ",
+                                          "git clone -b ",
+                                          {
+                                             "Ref" : "GitCloneBranch"
+                                          },
+                                          " ",
                                           {
                                              "Ref" : "GitCloneUrl"
                                           },

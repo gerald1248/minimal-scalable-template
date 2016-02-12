@@ -22,7 +22,8 @@ describe 'bastion' do
     end
     context 'in class Install' do
       it { should contain_file('/home/ec2-user/scripts').with_ensure('directory') }
-      it { should contain_file('/home/ec2-user/scripts/deploy.sh').with_ensure('file').with_owner('ec2-user').with_mode('0744') }
+      it { should contain_file('/home/ec2-user/scripts/deploy.py').with_ensure('file').with_owner('ec2-user').with_mode('0644') }
+      it { should contain_file('/home/ec2-user/scripts/stack_ids.json').with_ensure('file').with_owner('ec2-user').with_mode('0644') }
     end
   end
 end
