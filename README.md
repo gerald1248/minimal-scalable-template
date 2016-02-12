@@ -54,7 +54,7 @@ To keep things simple 'new code' here means the Puppet module `application` and/
     # the Route 53 hosted zone is example.com.
     # the private key is ci-user.pem
     ssh -i ~/.ssh/ci-user.pem -o StrictHostKeyChecking=no ec2-user@stack01-bastion.eu-west-1.example.com
-    scripts/deploy.sh
+    python scripts/deploy.py
 
 What happens next?
 ------------------
