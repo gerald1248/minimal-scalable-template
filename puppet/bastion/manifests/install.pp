@@ -10,10 +10,16 @@ class bastion::install {
   file { '/home/ec2-user/scripts':
     ensure => directory,
   } ->
-  file { '/home/ec2-user/scripts/deploy.sh':
+  file { '/home/ec2-user/stack_ids.json':
     ensure  => file,
     owner   => 'ec2-user',
-    mode    => '0744',
-    content => template('bastion/deploy.sh.erb'),
+    mode    => '0644',
+    content => template('bastion/stack_ids.json.erb'),
+  } ->
+  file { '/home/ec2-user/scripts/deploy.py':
+    ensure => file,
+    owner  => 'ec2-user',
+    mode   => '0644',
+    source => 'puppet:///modules/bastion/deploy.py',
   }
 }
