@@ -72,9 +72,9 @@ If you wish to use the bastion server as a jump host to the private subnets, che
     # the application server has IP 10.0.4.100
     ssh 10.0.4.100
 
-Couldn't you have used (Go|Java|Node.js|Python|Ruby)?
+Couldn't you have used (Go|Node.js|Ruby)?
 -----------------------------------------------------
-Yes, absolutely. It's probably a good next step. The idea was that most people have a strong preference when it comes to scripting languages, but everyone uses Bash to some extent. It's not usually what we hope to see, but it's never entirely out of place either. A thoroughly tested deployment script in a high-level language would be a great addition.
+Yes, absolutely. Ports of the Python deployment script (`deploy.py`) are very welcome.
 
 Why didn't you include AMIs for other regions?
 ----------------------------------------------
@@ -86,7 +86,7 @@ There's no need to worry about the other parameters right away. For example, the
 
 The rspec puppet tests aren't working on my computer 
 ----------------------------------------------------
-The aim is for the tests run successfully with 100% coverage every time; depending on your OS and system configuration, you may need to tweak and pin different ruby and puppet versions. `rvm` and `bundler` are your friends.
+The aim is for the tests run successfully with 100% coverage; depending on your OS and system configuration, you may need to tweak and pin different ruby and puppet versions. `rvm` and `bundler` are your friends.
 
 I've spotted a bug
 ------------------
