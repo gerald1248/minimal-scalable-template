@@ -128,4 +128,5 @@ if __name__ == "__main__":
       system.exit(2)
     sleep(interval)
     healthy_instances = elb_instance_count(elb)
+
   print sys.argv[0] + " successful"
