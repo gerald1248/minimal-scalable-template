@@ -91,7 +91,7 @@ def toggle_groups(id1, id2, elb):
 
     # exit if active/passive split not clear
     if (count1 > 0 and count2 > 0) or (count1 == 0 and count2 == 0):
-        print sys.argv[0] + " requires one active and one passive group to run"
+        print "Error: one active and one passive group required"
         sys.exit(1)
 
     if count1 > count2:
@@ -115,7 +115,7 @@ def toggle_groups(id1, id2, elb):
     while healthy_instances < active_count * 2:
         max_attempts -= 1
         if max_attempts == 0:
-            print sys.argv[0] + " timed out"
+            print "Error: deployment timed out; resetting passive group"
             group_update(passive_id, 0, 0, 0)
             sys.exit(2)
         sleep(interval)
@@ -124,7 +124,7 @@ def toggle_groups(id1, id2, elb):
     print "Deactivating {}".format(active_id)
     group_update(active_id, 0, 0, 0)
 
-    print sys.argv[0] + " successful"
+    print "Deployment successful"
 
 if __name__ == "__main__":
     doctest.testmod()
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         for arg in sys.argv:
             if arg == "--help" or arg == "-h":
-                print sys.argv[0] + " requires no parameters"
+                print "Ensure stack_ids.json is present in the working directory"
                 sys.exit(0)
 
     #fetch stack-specific parameters
