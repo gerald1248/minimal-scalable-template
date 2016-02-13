@@ -5,11 +5,11 @@ Deploys new code
 by toggling active and passive autoscaling groups
 """
 
-import boto3
-import doctest
-import json
 import sys
+import json
 from time import sleep
+import doctest
+import boto3
 
 # API call handlers
 def group_instance_count(group_id):
@@ -40,8 +40,7 @@ def elb_instance_count(elb_id):
 def group_instance_count_json(obj):
     """
     Test lifecycle parser
-    >>> group_instance_count_json(json.loads(
-    >>>     '{ "AutoScalingGroups": [ { "Instances": [ { "LifecycleState": "InService" } ] } ] }'))
+    >>> group_instance_count_json(json.loads('{ "AutoScalingGroups": [ { "Instances": [ { "LifecycleState": "InService" } ] } ] }'))
     1
     """
     instances = obj['AutoScalingGroups'][0]['Instances']
@@ -54,8 +53,7 @@ def group_instance_count_json(obj):
 def group_range_instances_json(obj):
     """
     Test range parser
-    >>> group_range_instances_json(
-    >>>     json.loads('{"AutoScalingGroups": [{"MinSize": 1, "MaxSize": 4}]}'))
+    >>> group_range_instances_json(json.loads('{"AutoScalingGroups": [{"MinSize": 1, "MaxSize": 4}]}'))
     (1, 4)
     """
     group = obj['AutoScalingGroups'][0]
