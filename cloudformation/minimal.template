@@ -627,6 +627,7 @@
                      "Instances" :
                         [
                         ],
+                     "CrossZone" : true,
                      "Subnets" :
                         [
                            {
