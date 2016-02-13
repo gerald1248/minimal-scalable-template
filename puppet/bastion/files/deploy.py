@@ -7,7 +7,6 @@ by toggling active and passive autoscaling groups
 
 import sys
 import json
-import re
 from time import sleep
 import doctest
 import boto3
@@ -26,15 +25,6 @@ DATA_FILE = 'stack_ids.json'
 
 # API call handlers
 def group_instance_count(group_id):
-    """
-    Test with invalid input
-    >>> group_instance_count('foo')
-    0
-    """
-    match = re.search(r'\w{8,}', group_id)
-    if not match:
-        return 0
-
     try:
         client = boto3.client('autoscaling')
         description = client.describe_auto_scaling_groups(AutoScalingGroupNames=[group_id])
@@ -45,15 +35,6 @@ def group_instance_count(group_id):
     return group_instance_count_json(description)
 
 def group_range_instances(group_id):
-    """
-    Test with invalid input
-    >>> group_range_instances('foo')
-    (0, 0)
-    """
-    match = re.search(r'\w{8,}', group_id)
-    if not match:
-        return (0, 0)
-
     try:
         client = boto3.client('autoscaling')
         description = client.describe_auto_scaling_groups(AutoScalingGroupNames=[group_id])
@@ -66,11 +47,10 @@ def group_range_instances(group_id):
 def group_update(group_id, group_min, group_max, desired):
     """
     Test with invalid input
-    >>> group_update('foo', 1, 1, 1)
+    >>> group_update('foo', 2, 1, 4)
     {}
     """
-    match = re.search(r'\w{8,}', group_id)
-    if not match or group_min >= group_max or desired < group_min or desired > group_max:
+    if group_min > group_max or desired < group_min or desired > group_max:
         return {}
 
     try:
@@ -86,15 +66,6 @@ def group_update(group_id, group_min, group_max, desired):
         sys.exit(127)
 
 def elb_instance_count(elb_id):
-    """
-    Test with invalid input
-    >>> elb_instance_count('bar')
-    0
-    """
-    match = re.search(r'\w{8,}', elb_id)
-    if not match:
-        return 0
-
     try:
         client = boto3.client('elb')
         description = client.describe_instance_health(LoadBalancerName=elb_id)
@@ -229,7 +200,7 @@ if __name__ == "__main__":
         print "Can't open {}: {}".format(DATA_FILE, ex.strerror)
         sys.exit(127)
     except ValueError as ex:
-        print "Can't decode JSON file {}: {}".format(DATA_FILE, ex.strerror)
+        print "Can't decode JSON file {}".format(DATA_FILE)
         sys.exit(127)
 
     try:
