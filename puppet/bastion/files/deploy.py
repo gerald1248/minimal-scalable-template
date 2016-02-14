@@ -133,24 +133,25 @@ def toggle_groups(id1, id2, elb):
     Test with invalid input
     >>> toggle_groups('foo', 'foo', 'bar')
     Error: group IDs match
+    False
     """
     # exit if same group given
     if id1 == id2:
         print "Error: group IDs match"
-        return
+        return False
 
     # identify active and passive groups
     count1 = group_instance_count(id1)
     count2 = group_instance_count(id2)
 
     # variables
-    interval = 90
-    max_attempts = 10
+    interval = 20
+    max_attempts = 30
 
     # exit if active/passive split not clear
     if (count1 > 0 and count2 > 0) or (count1 == 0 and count2 == 0):
         print "Error: one active and one passive group required"
-        sys.exit(2)
+        return False
 
     if count1 > count2:
         active_id = id1
@@ -173,17 +174,19 @@ def toggle_groups(id1, id2, elb):
     while healthy_instances < active_count * 2:
         max_attempts -= 1
         if max_attempts == 0:
-            print "Error: deployment timed out; resetting passive group"
+            print "\nError: deployment timed out; resetting passive group"
             group_update(passive_id, 0, 0, 0)
-            sys.exit(3)
-        print "Attempts remaining: {}".format(max_attempts)
+            return False
+        sys.stdout.write('.')
+        sys.stdout.flush()
         sleep(interval)
         healthy_instances = elb_instance_count(elb)
 
-    print "Deactivating {}".format(active_id)
+    print "\nDeactivating {}".format(active_id)
     group_update(active_id, 0, 0, 0)
 
     print "Deployment successful"
+    return True
 
 if __name__ == "__main__":
     doctest.testmod()
@@ -214,9 +217,9 @@ if __name__ == "__main__":
         sys.exit(127)
 
     try:
-        toggle_groups(ID1, ID2, ELB)
+        SUCCESS = toggle_groups(ID1, ID2, ELB)
     except botocore.exceptions.EndpointConnectionError:
         print "Can't connect to AWS endpoint"
         sys.exit(127)
 
-    sys.exit(0)
+    sys.exit(0 if SUCCESS else 127)

@@ -13,7 +13,7 @@ What does it look like?
 
 How do I get started?
 ---------------------
-If you have an AWS account, a Route 53 hosted zone and a key pair, you are ready to go. Choose `Create a Stack` on the CloudFormation welcome page. Under `Choose a template`, select `Upload a template to S3` and pick the file `minimal.template` from the [cloudformation](cloudformation) folder of this repo. Press `Next` to go to the parameter screen, where you can keep the defaults but need to supply:
+If you have an AWS account, a Route 53 hosted zone and a key pair, you're ready to go. Choose `Create a Stack` on the CloudFormation welcome page. Under `Choose a template`, select `Upload a template to S3` and pick the file `minimal.template` from the [cloudformation](cloudformation) folder of this repo. Press `Next` to go to the parameter screen, where you can keep the defaults but need to supply:
 
 * stack name (e.g. stack01)
 * Route 53 hosted zone (e.g. example.com.)
@@ -47,18 +47,27 @@ If you must know, the application is as plain and simple as [this](https://rawgi
 
 How do I deploy the latest code?
 --------------------------------
-To keep things simple 'new code' here means the Puppet module `application` and/or `bastion` has changed in Git. (Real life scenarios are likely to involve local `rpm` or `apt` repos and mirrors, S3 buckets, and perhaps a neat staging process with multiple puppet masters. The trouble is that these add a lot of dependencies that don't suit a *minimal* template.) To deploy your merged changes, instruct your preferred CI tool (Jenkins, say) to perform the following steps:
+To keep things simple 'new code' here means the Puppet module `application` and/or `bastion` has changed in the specified Git repo and branch. (Real life scenarios are likely to involve local `rpm` or `apt` repos and mirrors, S3 buckets, and perhaps a neat staging process with multiple puppet masters. The trouble is that these add a lot of dependencies that don't suit a *minimal* template.) To deploy your merged changes, instruct your preferred CI tool (Jenkins, say) to perform the following steps:
 
     # let's assume:
     # the stack name is stack01
     # the Route 53 hosted zone is example.com.
-    # the private key is ci-user.pem
-    ssh -i ~/.ssh/ci-user.pem -o StrictHostKeyChecking=no ec2-user@stack01-bastion.eu-west-1.example.com
+    # the private key is ci_user.pem
+    ssh -i ~/.ssh/ci_user.pem -o StrictHostKeyChecking=no ec2-user@stack01-bastion.eu-west-1.example.com
     python scripts/deploy.py
 
 What happens next?
 ------------------
-The script checks which of the two autoscaling groups is currently active. It then raises the number of instances in the passive group to match the active group's strength. When both groups are at full strength (as confirmed by the load balancer's health check), the old active group is reduced to zero instances. The old active group is now the passive group and the new code is live.
+The expected output is:
+   [ec2-user@ip-10-0-1-100 ~]$ python scripts/deploy.py
+   Active group: stack01-Group1-OU6GXZ5HRQDH
+   Passive group: stack01-Group2-HOXIWD54M30G
+   Activating stack01-Group2-HOXIWD54M30G
+   ........
+   Deactivating stack01-Group1-OU6GXZ5HRQDH
+   Deployment successful 
+
+What happened there? The script checks which of the two autoscaling groups is currently active. It then raises the number of instances in the passive group to match the active group's strength. When both groups are at full strength (as confirmed by the load balancer's health check), the old active group is reduced to zero instances. The old active group is now the passive group and the new code is live.
 
 Can I take a look around the private subnets?
 ---------------------------------------------
@@ -67,8 +76,8 @@ If you wish to use the bastion server as a jump host to the private subnets, che
     # let's say the parameters haven't changed
     # the application is part of a scaling group,
     # so the IP address isn't fixed 
-    ssh-add ~/.ssh/ci-user.pem
-    ssh -A -i ~/.ssh/ci-user.pem -o StrictHostKeyChecking=no ec2-user@stack01-bastion.eu-west-1.example.com 
+    ssh-add ~/.ssh/ci_user.pem
+    ssh -A -i ~/.ssh/ci_user.pem -o StrictHostKeyChecking=no ec2-user@stack01-bastion.eu-west-1.example.com 
     # the application server has IP 10.0.4.100
     ssh 10.0.4.100
 
