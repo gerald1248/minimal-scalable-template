@@ -29,7 +29,7 @@ def group_instance_count(group_id):
         client = boto3.client('autoscaling')
         description = client.describe_auto_scaling_groups(AutoScalingGroupNames=[group_id])
     except botocore.exceptions.ClientError:
-        print "Client error"
+        print "Autoscaling client error: describe_auto_scaling_groups"
         sys.exit(127)
 
     return group_instance_count_json(description)
@@ -39,7 +39,7 @@ def group_range_instances(group_id):
         client = boto3.client('autoscaling')
         description = client.describe_auto_scaling_groups(AutoScalingGroupNames=[group_id])
     except botocore.exceptions.ClientError:
-        print "Client error"
+        print "Autoscaling client error: describe_auto_scaling_groups"
         sys.exit(127)
 
     return group_range_instances_json(description)
@@ -60,17 +60,18 @@ def group_update(group_id, group_min, group_max, desired):
             MinSize=group_min,
             MaxSize=group_max,
             DesiredCapacity=desired)
-        return response
     except botocore.exceptions.ClientError:
-        print "Client error"
+        print "Autoscaling client error: update_auto_scaling_group"
         sys.exit(127)
+
+    return response
 
 def elb_instance_count(elb_id):
     try:
         client = boto3.client('elb')
         description = client.describe_instance_health(LoadBalancerName=elb_id)
     except botocore.exceptions.ClientError:
-        print "Client error"
+        print "ELB client error: describe_instance_health"
         sys.exit(127)
 
     return elb_instance_count_json(description)
@@ -175,6 +176,7 @@ def toggle_groups(id1, id2, elb):
             print "Error: deployment timed out; resetting passive group"
             group_update(passive_id, 0, 0, 0)
             sys.exit(3)
+        print "Attempts remaining: {}".format(max_attempts)
         sleep(interval)
         healthy_instances = elb_instance_count(elb)
 
