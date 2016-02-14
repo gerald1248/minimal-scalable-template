@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Deploys new code
+Deploys new code to application and/or bastion
 by toggling active and passive autoscaling groups
 """
 
@@ -10,30 +10,70 @@ import json
 from time import sleep
 import doctest
 import boto3
+import botocore
+
+USAGE = """
+Usage: python [relative/path/to/]deploy.py
+Arguments: none except --help/-h, which bring up this text
+Develop:
+$ virtualenv ve
+$ source ve/bin/activate
+$ pip install boto3
+The script expects to find stack_ids.json in the working directory
+"""
+DATA_FILE = 'stack_ids.json'
 
 # API call handlers
 def group_instance_count(group_id):
-    client = boto3.client('autoscaling')
-    description = client.describe_auto_scaling_groups(AutoScalingGroupNames=[group_id])
+    try:
+        client = boto3.client('autoscaling')
+        description = client.describe_auto_scaling_groups(AutoScalingGroupNames=[group_id])
+    except botocore.exceptions.ClientError:
+        print "Autoscaling client error: describe_auto_scaling_groups"
+        sys.exit(127)
+
     return group_instance_count_json(description)
 
 def group_range_instances(group_id):
-    client = boto3.client('autoscaling')
-    description = client.describe_auto_scaling_groups(AutoScalingGroupNames=[group_id])
+    try:
+        client = boto3.client('autoscaling')
+        description = client.describe_auto_scaling_groups(AutoScalingGroupNames=[group_id])
+    except botocore.exceptions.ClientError:
+        print "Autoscaling client error: describe_auto_scaling_groups"
+        sys.exit(127)
+
     return group_range_instances_json(description)
 
 def group_update(group_id, group_min, group_max, desired):
-    client = boto3.client('autoscaling')
-    response = client.update_auto_scaling_group(
-        AutoScalingGroupName=group_id,
-        MinSize=group_min,
-        MaxSize=group_max,
-        DesiredCapacity=desired)
+    """
+    Test with invalid input
+    >>> group_update('foo', 2, 1, 4)
+    {}
+    """
+    if group_min > group_max or desired < group_min or desired > group_max:
+        return {}
+
+    try:
+        client = boto3.client('autoscaling')
+        response = client.update_auto_scaling_group(
+            AutoScalingGroupName=group_id,
+            MinSize=group_min,
+            MaxSize=group_max,
+            DesiredCapacity=desired)
+    except botocore.exceptions.ClientError:
+        print "Autoscaling client error: update_auto_scaling_group"
+        sys.exit(127)
+
     return response
 
 def elb_instance_count(elb_id):
-    client = boto3.client('elb')
-    description = client.describe_instance_health(LoadBalancerName=elb_id)
+    try:
+        client = boto3.client('elb')
+        description = client.describe_instance_health(LoadBalancerName=elb_id)
+    except botocore.exceptions.ClientError:
+        print "ELB client error: describe_instance_health"
+        sys.exit(127)
+
     return elb_instance_count_json(description)
 
 # JSON handlers
@@ -75,15 +115,33 @@ def elb_instance_count_json(obj):
     return in_service
 
 def read_json(path):
-    json_buffer = open(path)
-    obj = json.load(json_buffer)
-    json_buffer.close()
+    """
+    Test with invalid input
+    >>> read_json('/non/existent/path')
+    {}
+    """
+    try:
+        json_buffer = open(path)
+        obj = json.load(json_buffer)
+        json_buffer.close()
+    except IOError:
+        return {}
     return obj
 
 def toggle_groups(id1, id2, elb):
+    """
+    Test with invalid input
+    >>> toggle_groups('foo', 'foo', 'bar')
+    Error: group IDs match
+    """
+    # exit if same group given
+    if id1 == id2:
+        print "Error: group IDs match"
+        return
+
     # identify active and passive groups
-    count1 = group_instance_count(ID1)
-    count2 = group_instance_count(ID2)
+    count1 = group_instance_count(id1)
+    count2 = group_instance_count(id2)
 
     # variables
     interval = 90
@@ -92,7 +150,7 @@ def toggle_groups(id1, id2, elb):
     # exit if active/passive split not clear
     if (count1 > 0 and count2 > 0) or (count1 == 0 and count2 == 0):
         print "Error: one active and one passive group required"
-        sys.exit(1)
+        sys.exit(2)
 
     if count1 > count2:
         active_id = id1
@@ -117,7 +175,8 @@ def toggle_groups(id1, id2, elb):
         if max_attempts == 0:
             print "Error: deployment timed out; resetting passive group"
             group_update(passive_id, 0, 0, 0)
-            sys.exit(2)
+            sys.exit(3)
+        print "Attempts remaining: {}".format(max_attempts)
         sleep(interval)
         healthy_instances = elb_instance_count(elb)
 
@@ -133,15 +192,31 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         for arg in sys.argv:
             if arg == "--help" or arg == "-h":
-                print "Ensure stack_ids.json is present in the working directory"
+                print USAGE
                 sys.exit(0)
 
-    #fetch stack-specific parameters
-    STACK_IDS_OBJ = read_json('stack_ids.json')
-    ID1 = STACK_IDS_OBJ['id1']
-    ID2 = STACK_IDS_OBJ['id2']
-    ELB = STACK_IDS_OBJ['elb']
+    #fetch stack parameters
+    try:
+        STACK_IDS_OBJ = read_json(DATA_FILE)
+    except IOError as ex:
+        print "Can't open {}: {}".format(DATA_FILE, ex.strerror)
+        sys.exit(127)
+    except ValueError as ex:
+        print "Can't decode JSON file {}".format(DATA_FILE)
+        sys.exit(127)
 
-    toggle_groups(ID1, ID2, ELB)
+    try:
+        ID1 = STACK_IDS_OBJ['id1']
+        ID2 = STACK_IDS_OBJ['id2']
+        ELB = STACK_IDS_OBJ['elb']
+    except KeyError:
+        print "Can't obtain IDs from {}".format(DATA_FILE)
+        sys.exit(127)
+
+    try:
+        toggle_groups(ID1, ID2, ELB)
+    except botocore.exceptions.EndpointConnectionError:
+        print "Can't connect to AWS endpoint"
+        sys.exit(127)
+
     sys.exit(0)
-
