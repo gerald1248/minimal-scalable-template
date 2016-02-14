@@ -59,13 +59,14 @@ To keep things simple 'new code' here means the Puppet module `application` and/
 What happens next?
 ------------------
 The expected output is:
-   [ec2-user@ip-10-0-1-100 ~]$ python scripts/deploy.py
-   Active group: stack01-Group1-OU6GXZ5HRQDH
-   Passive group: stack01-Group2-HOXIWD54M30G
-   Activating stack01-Group2-HOXIWD54M30G
-   ........
-   Deactivating stack01-Group1-OU6GXZ5HRQDH
-   Deployment successful 
+
+    [ec2-user@ip-10-0-1-100 ~]$ python scripts/deploy.py
+    Active group: stack01-Group1-OU6GXZ5HRQDH
+    Passive group: stack01-Group2-HOXIWD54M30G
+    Activating stack01-Group2-HOXIWD54M30G
+    ........
+    Deactivating stack01-Group1-OU6GXZ5HRQDH
+    Deployment successful 
 
 What happened there? The script checks which of the two autoscaling groups is currently active. It then raises the number of instances in the passive group to match the active group's strength. When both groups are at full strength (as confirmed by the load balancer's health check), the old active group is reduced to zero instances. The old active group is now the passive group and the new code is live.
 
