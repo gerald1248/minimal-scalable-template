@@ -204,7 +204,7 @@ if __name__ == "__main__":
     except IOError as ex:
         print "Can't open {}: {}".format(DATA_FILE, ex.strerror)
         sys.exit(127)
-    except ValueError as ex:
+    except ValueError:
         print "Can't decode JSON file {}".format(DATA_FILE)
         sys.exit(127)
 
