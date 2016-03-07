@@ -6,6 +6,7 @@ by toggling active and passive autoscaling groups
 """
 
 import sys
+import re
 import json
 from time import sleep
 import doctest
@@ -22,9 +23,20 @@ $ pip install boto3
 The script expects to find stack_ids.json in the working directory
 """
 DATA_FILE = 'stack_ids.json'
+GROUP_ID_PATTERN = '^.+-Group[12]-[A-Z0-9]+$'
+ELB_ID_PATTERN = '^.+-ELB-[A-Z0-9]+$'
 
 # API call handlers
 def group_instance_count(group_id):
+    """
+    Test invalid group ID
+    >>> group_instance_count('foo')
+    -1
+    """
+    reg = re.compile(GROUP_ID_PATTERN)
+    if not reg.match(group_id):
+        return -1
+
     try:
         client = boto3.client('autoscaling')
         description = client.describe_auto_scaling_groups(AutoScalingGroupNames=[group_id])
@@ -35,6 +47,15 @@ def group_instance_count(group_id):
     return group_instance_count_json(description)
 
 def group_range_instances(group_id):
+    """
+    Test invalid group ID
+    >>> group_range_instances('foo')
+    -1
+    """
+    reg = re.compile(GROUP_ID_PATTERN)
+    if not reg.match(group_id):
+        return -1
+
     try:
         client = boto3.client('autoscaling')
         description = client.describe_auto_scaling_groups(AutoScalingGroupNames=[group_id])
@@ -67,6 +88,15 @@ def group_update(group_id, group_min, group_max, desired):
     return response
 
 def elb_instance_count(elb_id):
+    """
+    Test invalid ELB ID
+    >>> elb_instance_count('foo')
+    -1
+    """
+    reg = re.compile(ELB_ID_PATTERN)
+    if not reg.match(elb_id):
+        return -1
+
     try:
         client = boto3.client('elb')
         description = client.describe_instance_health(LoadBalancerName=elb_id)
@@ -143,6 +173,9 @@ def toggle_groups(id1, id2, elb):
     # identify active and passive groups
     count1 = group_instance_count(id1)
     count2 = group_instance_count(id2)
+    if count1 == -1 or count2 == -1:
+        print "Error: invalid group ID"
+        return False
 
     # variables
     interval = 20
@@ -171,6 +204,10 @@ def toggle_groups(id1, id2, elb):
     group_update(passive_id, active_range[0], active_range[1], active_count)
 
     healthy_instances = elb_instance_count(elb)
+    if healthy_instances == -1:
+        print "Error: invalid ELB ID"
+        return False
+
     while healthy_instances < active_count * 2:
         max_attempts -= 1
         if max_attempts == 0:
