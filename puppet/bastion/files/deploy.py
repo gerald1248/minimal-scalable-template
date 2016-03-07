@@ -113,6 +113,9 @@ def group_instance_count_json(obj):
     >>> group_instance_count_json(json.loads('{ "AutoScalingGroups": [ { "Instances": [ { "LifecycleState": "InService" } ] } ] }'))
     1
     """
+    if not obj['AutoScalingGroups']:
+        return 0
+
     instances = obj['AutoScalingGroups'][0]['Instances']
     in_service = 0
     for instance in instances:
