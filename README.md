@@ -9,7 +9,7 @@ Here's a minimal CloudFormation template that's designed to be:
 
 What does it look like?
 -----------------------
-![Schematic of the stack with VPC, three public and three private subnets, load balancer, bastion, application and NAT servers](images/schematic.gif)
+<img src="images/schematic.gif" width="600" alt="Schematic of the stack with VPC, three public and three private subnets, load balancer, bastion, application and NAT servers"/>
 
 How do I get started?
 ---------------------
@@ -96,7 +96,7 @@ There's no need to worry about the other parameters right away. For example, the
 
 The rspec puppet tests aren't working on my computer 
 ----------------------------------------------------
-The aim is for the tests run successfully with 100% coverage; depending on your OS and system configuration, you may need to tweak and pin different ruby and puppet versions. `rvm` and `bundler` are your friends.
+The aim is for the tests to run successfully with 100% coverage; depending on your OS and system configuration, you may need to tweak and pin different ruby and puppet versions. `rvm` and `bundler` are your friends.
 
 I've spotted a bug
 ------------------
