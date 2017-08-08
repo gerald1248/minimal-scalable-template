@@ -17,7 +17,7 @@ If you have an AWS account, a Route 53 hosted zone and a key pair, you're ready 
 
 * stack name (e.g. stack01)
 * Route 53 hosted zone (e.g. example.com.)
-* key pair (e.g. ci\_user.pem)
+* key pair (e.g. `ci\_user`)
 
 Press `Next` again and, on the next screen, acknowledge that the template will create IAM users. Pressing `Create` will build the stack.
 
