@@ -1,1745 +1,869 @@
-{
-   "AWSTemplateFormatVersion" : "2010-09-09",
-   "Parameters" :
-      {
-         "AutoScalingMax" :
-            {
-               "Description" : "Maximum number of application servers",
-               "Type" : "Number",
-               "Default" : "1",
-               "MinValue" : "1",
-               "MaxValue" : "16",
-               "ConstraintDescription" : "Must be between 1 and 16"
-            },         
-         "AutoScalingMin" :
-            {
-               "Description" : "Minimum number of application servers",
-               "Type" : "Number",
-               "Default" : "1",
-               "MinValue" : "1",
-               "MaxValue" : "8",
-               "ConstraintDescription" : "Must be between 1 and 8"
-            },
-         "BastionIngressCidrIp" :
-            {
-               "Description" : "CIDR range for SSH access to bastion host",
-               "Type" : "String",
-               "Default" : "0.0.0.0/0",
-               "ConstraintDescription" : "CIDR range should be as narrow as possible"
-            },
-         "DnsHostedZone" :
-            {
-               "Type" : "String",
-               "Description" : "The DNS name of an existing Amazon Route 53 hosted zone"
-            },
-         "DnsRecordBastion" :
-            {
-               "Type" : "String",
-               "Description" : "Route 53 record for the bastion server req'd?",
-               "Default" : "true",
-               "AllowedValues" :
-                  [
-                     "true",
-                     "false"
-                  ],
-               "ConstraintDescription" : "Must be true or false"
-            },
-         "DnsRecordELB" :
-            {
-               "Type" : "String",
-               "Description" : "Route 53 record for the load balancer req'd?",
-               "Default" : "true",
-               "AllowedValues" :
-                  [
-                     "true",
-                     "false"
-                  ],
-               "ConstraintDescription" : "Must be true or false"
-            },
-         "GitCloneBranch" :
-            {
-               "Description" : "Git Branch",
-               "Type" : "String",
-               "Default" : "master"
-            },
-         "GitCloneUrl" :
-            {
-               "Description" : "URL for Git repo",
-               "Type" : "String",
-               "Default" : "https://github.com/gerald1248/minimal-scalable-template.git"
-            },
-         "InstancePerformance" :
-            {
-               "Description" : "Toggle for default or low performance",
-               "Type" : "String",
-               "Default" : "default",
-               "AllowedPattern" : "(default|low)",
-               "ConstraintDescription" : "set to 'default' or 'low'; choose 'default' for free tier"
-            },
-         "KeyName" :
-            {
-               "Description" : "Existing EC2 KeyPair for SSH access to the bastion instance",
-               "Type" : "AWS::EC2::KeyPair::KeyName",
-               "ConstraintDescription" : "must be the name of an existing EC2 KeyPair"
-            },
-         "WebServerPort" :
-            {
-               "Description" : "TCP/IP port of the web server",
-               "Type" : "String",
-               "Default" : "80"
-            }
-      },
-   "Mappings" :
-      {
-         "RegionMap" :
-            {
-               "eu-west-1" :
-                  {
-                     "AMI" : "ami-10e43b63",
-                     "AMINAT" : "ami-ef76e898",
-                     "MAXZONE" : "2"
-                  }
-            },
-         "InstanceMap" :
-            {
-               "default" :
-                  {
-                     "Application" : "t2.micro",
-                     "Bastion" : "t2.micro",
-                     "Nat" : "t2.micro"
-                  },
-               "low" :
-                  {
-                     "Application" : "t2.nano",
-                     "Bastion" : "t2.nano",
-                     "Nat" : "t2.nano"
-                  }
-            }
-      },
-   "Conditions" :
-      {
-         "CreateDnsRecordELB" :
-            {
-               "Fn::Equals" :
-                  [
-                     {
-                        "Ref" : "DnsRecordELB"
-                     },
-                     "true"
-                  ]
-            },
-         "CreateDnsRecordBastion" :
-            {
-               "Fn::Equals" :
-                  [
-                     {
-                        "Ref" : "DnsRecordBastion"
-                     },
-                     "true"
-                  ]
-            }
-      },
-   "Resources" :
-      {
-         "MinimalVpc" :
-            {
-               "Type" : "AWS::EC2::VPC",
-               "Properties" :
-                  {
-                     "CidrBlock" : "10.0.0.0/16",
-                     "InstanceTenancy" : "default",
-                     "EnableDnsSupport" : "true",
-                     "EnableDnsHostnames" : "true",
-                     "Tags" :
-                        [
-                           {
-                              "Key" : "Name",
-                              "Value" : "MinimalVpc"
-                           }
-                        ]
-                  }
-            },
-         "MinimalVpcSubnetPublicA" :
-            {
-               "Type" : "AWS::EC2::Subnet",
-               "Properties" :
-                  {
-                     "CidrBlock" : "10.0.1.0/24",
-                     "AvailabilityZone" :
-                        {
-                           "Fn::Select" :
-                              [
-                                 "0",
-                                 {
-                                    "Fn::GetAZs" :
-                                       {
-                                          "Ref" : "AWS::Region"
-                                       }
-                                 }
-                              ]
-                        },
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "Tags" :
-                        [
-                           {
-                              "Key" : "Name",
-                              "Value" : "MinimalVpc_a_pbl"
-                           }
-                        ]
-                  }
-            },
-         "MinimalVpcSubnetPublicB" :
-            {
-               "Type" : "AWS::EC2::Subnet",
-               "Properties" :
-                  {
-                     "CidrBlock" : "10.0.2.0/24",
-                     "AvailabilityZone" :
-                        {
-                           "Fn::Select" :
-                              [
-                                 "1",
-                                 {
-                                    "Fn::GetAZs" :
-                                       {
-                                          "Ref" : "AWS::Region"
-                                       }
-                                 }
-                              ]
-                        },
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "Tags" :
-                        [
-                           {
-                              "Key" : "Name",
-                              "Value" : "MinimalVpc_b_pbl"
-                           }
-                        ]
-                  }
-            },
-         "MinimalVpcSubnetPublicC" :
-            {
-               "Type" : "AWS::EC2::Subnet",
-               "Properties" :
-                  {
-                     "CidrBlock" : "10.0.3.0/24",
-                     "AvailabilityZone" :
-                        {
-                           "Fn::Select" :
-                              [
-                                 {
-                                    "Fn::FindInMap" :
-                                       [
-                                          "RegionMap",
-                                          {
-                                             "Ref" : "AWS::Region"
-                                          },
-                                          "MAXZONE"
-                                       ]
-                                 },
-                                 {
-                                    "Fn::GetAZs" :
-                                       {
-                                          "Ref" : "AWS::Region"
-                                       }
-                                 }
-                              ]
-                        },
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "Tags" :
-                        [
-                           {
-                              "Key" : "Name",
-                              "Value" : "MinimalVpc_c_pbl"
-                           }
-                        ]
-                  }
-            },
-         "MinimalVpcSubnetPrivateA" :
-            {
-               "Type" : "AWS::EC2::Subnet",
-               "Properties" :
-                  {
-                     "CidrBlock" : "10.0.4.0/24",
-                     "AvailabilityZone" :
-                        {
-                           "Fn::Select" :
-                              [
-                                 "0",
-                                 {
-                                    "Fn::GetAZs" :
-                                       {
-                                          "Ref" : "AWS::Region"
-                                       }
-                                 }
-                              ]
-                        },
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "Tags" :
-                        [
-                           {
-                              "Key" : "Name",
-                              "Value" : "MinimalVpc_a_prv"
-                           }
-                        ]
-                  }
-            },
-         "MinimalVpcSubnetPrivateB" :
-            {
-               "Type" : "AWS::EC2::Subnet",
-               "Properties" :
-                  {
-                     "CidrBlock" : "10.0.5.0/24",
-                     "AvailabilityZone" :
-                        {
-                           "Fn::Select" :
-                              [
-                                 "1",
-                                 {
-                                    "Fn::GetAZs" :
-                                       {
-                                          "Ref" : "AWS::Region"
-                                       }
-                                 }
-                              ]
-                        },
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "Tags" :
-                        [
-                           {
-                              "Key" : "Name",
-                              "Value" : "MinimalVpc_b_prv"
-                           }
-                        ]
-                  }
-            },
-         "MinimalVpcSubnetPrivateC" :
-            {
-               "Type" : "AWS::EC2::Subnet",
-               "Properties" :
-                  {
-                     "CidrBlock" : "10.0.6.0/24",
-                     "AvailabilityZone" :
-                        {
-                           "Fn::Select" :
-                              [
-                                 {
-                                    "Fn::FindInMap" :
-                                       [
-                                          "RegionMap",
-                                          {
-                                             "Ref" : "AWS::Region"
-                                          },
-                                          "MAXZONE"
-                                       ]
-                                 },
-                                 {
-                                    "Fn::GetAZs" :
-                                       {
-                                          "Ref" : "AWS::Region"
-                                       }
-                                 }
-                              ]
-                        },
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "Tags" :
-                        [
-                           {
-                              "Key" : "Name",
-                              "Value" : "MinimalVpc_c_prv"
-                           }
-                        ]
-                  }
-            },
-         "InternetGateway" :
-            {
-               "Type" : "AWS::EC2::InternetGateway",
-               "Properties" :
-                  {
-                  }
-            },
-         "InternetGatewayAttachment" :
-            {
-               "Type" : "AWS::EC2::VPCGatewayAttachment",
-               "Properties" :
-                  {
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "InternetGatewayId" :
-                        {
-                           "Ref" : "InternetGateway"
-                        }
-                  }
-            },
-         "RoutingTablePublic" :
-            {
-               "Type" : "AWS::EC2::RouteTable",
-               "Properties" :
-                  {
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        }
-                  }
-            },
-         "RoutingTablePrivate" :
-            {
-               "Type" : "AWS::EC2::RouteTable",
-               "Properties" :
-                  {
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        }
-                  }
-            },
-         "OutboundPublicSubnet" :
-            {
-               "Type" : "AWS::EC2::Route",
-               "DependsOn" : "InternetGatewayAttachment",
-               "Properties" :
-                  {
-                     "DestinationCidrBlock" : "0.0.0.0/0",
-                     "RouteTableId" :
-                        {
-                           "Ref" : "RoutingTablePublic"
-                        },
-                     "GatewayId" :
-                        {
-                           "Ref" : "InternetGateway"
-                        }
-                  }
-            },
-         "OutboundPrivateSubnet" :
-            {
-               "Type" : "AWS::EC2::Route",
-               "Properties" :
-                  {
-                     "DestinationCidrBlock" : "0.0.0.0/0",
-                     "RouteTableId" :
-                        {
-                           "Ref" : "RoutingTablePrivate"
-                        },
-                     "InstanceId" :
-                        {
-                           "Ref" : "Nat"
-                        }
-                  }
-            },
-         "SubnetRouteAssocPublicA" :
-            {
-               "Type" : "AWS::EC2::SubnetRouteTableAssociation",
-               "Properties" :
-                  {
-                     "RouteTableId" :
-                        {
-                           "Ref" : "RoutingTablePublic"
-                        },
-                     "SubnetId" :
-                        {
-                           "Ref" : "MinimalVpcSubnetPublicA"
-                        }
-                  }
-            },
-         "SubnetRouteAssocPublicB" :
-            {
-               "Type" : "AWS::EC2::SubnetRouteTableAssociation",
-               "Properties" :
-                  {
-                     "RouteTableId" :
-                        {
-                           "Ref" : "RoutingTablePublic"
-                        },
-                     "SubnetId" :
-                        {
-                           "Ref" : "MinimalVpcSubnetPublicB"
-                        }
-                  }
-            },
-         "SubnetRouteAssocPublicC" :
-            {
-               "Type" : "AWS::EC2::SubnetRouteTableAssociation",
-               "Properties" :
-                  {
-                     "RouteTableId" :
-                        {
-                           "Ref" : "RoutingTablePublic"
-                        },
-                     "SubnetId" :
-                        {
-                           "Ref" : "MinimalVpcSubnetPublicC"
-                        }
-                  }
-            },
-         "SubnetRouteAssocPrivateA" :
-            {
-               "Type" : "AWS::EC2::SubnetRouteTableAssociation",
-               "Properties" :
-                  {
-                     "RouteTableId" :
-                        {
-                           "Ref" : "RoutingTablePrivate"
-                        },
-                     "SubnetId" :
-                        {
-                           "Ref" : "MinimalVpcSubnetPrivateA"
-                        }
-                  }
-            },
-         "SubnetRouteAssocPrivateB" :
-            {
-               "Type" : "AWS::EC2::SubnetRouteTableAssociation",
-               "Properties" :
-                  {
-                     "RouteTableId" :
-                        {
-                           "Ref" : "RoutingTablePrivate"
-                        },
-                     "SubnetId" :
-                        {
-                           "Ref" : "MinimalVpcSubnetPrivateB"
-                        }
-                  }
-            },
-         "SubnetRouteAssocPrivateC" :
-            {
-               "Type" : "AWS::EC2::SubnetRouteTableAssociation",
-               "Properties" :
-                  {
-                     "RouteTableId" :
-                        {
-                           "Ref" : "RoutingTablePrivate"
-                        },
-                     "SubnetId" :
-                        {
-                           "Ref" : "MinimalVpcSubnetPrivateC"
-                        }
-                  }
-            },
-         "NatEIP" :
-            {
-               "Type" : "AWS::EC2::EIP",
-               "DependsOn" :
-                  [
-                     "InternetGatewayAttachment"
-                  ],
-               "Properties" :
-                  {
-                     "Domain" : "vpc",
-                     "InstanceId" :
-                        {
-                           "Ref" : "Nat"
-                        }
-                  }
-            },
-         "Nat" :
-            {
-               "Type" : "AWS::EC2::Instance",
-               "Properties" :
-                  {
-                     "SourceDestCheck" : "false",
-                     "DisableApiTermination" : "false",
-                     "ImageId" :
-                        {
-                           "Fn::FindInMap" :
-                              [
-                                 "RegionMap",
-                                 {
-                                    "Ref" : "AWS::Region"
-                                 },
-                                 "AMINAT"
-                              ]
-                        },
-                     "InstanceType" :
-                        {
-                           "Fn::FindInMap" :
-                              [
-                                 "InstanceMap",
-                                 {
-                                    "Ref" : "InstancePerformance"
-                                 },
-                                 "Nat"
-                              ]
-                        },
-                     "KeyName" :
-                        {
-                           "Ref" : "KeyName"
-                        },
-                     "Monitoring" : "true",
-                     "Tags" :
-                        [
-                           {
-                              "Key" : "Name",
-                              "Value" : "vpc-nat"
-                           }
-                        ],
-                     "NetworkInterfaces" :
-                        [
-                           {
-                              "DeleteOnTermination" : "true",
-                              "DeviceIndex" : 0,
-                              "SubnetId" :
-                                 {
-                                    "Ref" : "MinimalVpcSubnetPublicC"
-                                 },
-                              "PrivateIpAddresses" :
-                                 [
-                                    {
-                                       "PrivateIpAddress" : "10.0.3.110",
-                                       "Primary" : "true"
-                                    }
-                                 ],
-                              "GroupSet" :
-                                 [
-                                    {
-                                       "Ref" : "SecurityGroupNAT"
-                                    }
-                                 ]
-                           }
-                        ]
-                  }
-            },
-         "ELB" :
-            {
-               "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
-               "Properties" :
-                  {
-                     "Instances" :
-                        [
-                        ],
-                     "CrossZone" : true,
-                     "Subnets" :
-                        [
-                           {
-                              "Ref" : "MinimalVpcSubnetPublicA"
-                           },
-                           {
-                              "Ref" : "MinimalVpcSubnetPublicC"
-                           }
-                        ],
-                     "HealthCheck" :
-                        {
-                           "Target" :
-                              {
-                                 "Fn::Join" :
-                                    [
-                                       "",
-                                       [
-                                          "TCP:",
-                                          {
-                                             "Ref" : "WebServerPort"
-                                          }
-                                       ]
-                                    ]
-                              },
-                           "HealthyThreshold" : "2",
-                           "UnhealthyThreshold" : "2",
-                           "Interval" : "30",
-                           "Timeout" : "5"
-                        },
-                     "SecurityGroups" :
-                        [
-                           {
-                              "Ref" : "SecurityGroupELB"
-                           }
-                        ],
-                     "Listeners" :
-                        [
-                           {
-                              "InstancePort" :
-                                 {
-                                    "Ref" : "WebServerPort"
-                                 },
-                              "LoadBalancerPort" : "80",
-                              "Protocol" : "HTTP",
-                              "InstanceProtocol" : "HTTP",
-                              "PolicyNames" :
-                                 [
-                                    "minimalCookieStickinessPolicy"
-                                 ]
-                           }
-                        ],
-                     "LBCookieStickinessPolicy" :
-                        [
-                           {
-                              "PolicyName" : "minimalCookieStickinessPolicy",
-                              "CookieExpirationPeriod" : "60"
-                           }
-                        ],
-                     "ConnectionDrainingPolicy" :
-                        {
-                           "Enabled" : "true",
-                           "Timeout" : "30"
-                        }
-                  }
-            },
-         "Bastion" :
-            {
-               "Type" : "AWS::EC2::Instance",
-               "Properties" :
-                  {
-                     "DisableApiTermination" : "false",
-                     "ImageId" :
-                        {
-                           "Fn::FindInMap" :
-                              [
-                                 "RegionMap",
-                                 {
-                                    "Ref" : "AWS::Region"
-                                 },
-                                 "AMI"
-                              ]
-                        },
-                     "InstanceType" :
-                        {
-                           "Fn::FindInMap" :
-                              [
-                                 "InstanceMap",
-                                 {
-                                    "Ref" : "InstancePerformance"
-                                 },
-                                 "Bastion"
-                              ]
-                        },
-                     "KeyName" :
-                        {
-                           "Ref" : "KeyName"
-                        },
-                     "Monitoring" : "true",
-                     "Tags" :
-                        [
-                           {
-                              "Key" : "Name",
-                              "Value" : "vpc-bastion"
-                           }
-                        ],
-                     "UserData" :
-                        {
-                           "Fn::Base64" :
-                              {
-                                 "Fn::Join" :
-                                    [
-                                       "",
-                                       [
-                                          "#!/usr/bin/env bash\n",
-                                          "yum -y install git\n",
-                                          "yum -y install puppet3\n",
-                                          "pip install boto3\n",
-                                          "[ -d /etc/facter/facts.d ] || mkdir -p /etc/facter/facts.d\n",
-                                          "cat > /etc/facter/facts.d/stack_ids.txt <<EOT\n",
-                                          "auto_scaling_group1=",
-                                          {
-                                             "Ref" : "Group1"
-                                          },
-                                          "\n",
-                                          "auto_scaling_group2=",
-                                          {
-                                             "Ref" : "Group2"
-                                          },
-                                          "\n",
-                                          "elastic_load_balancer=",
-                                          {
-                                             "Ref" : "ELB"
-                                          },
-                                          "\n",
-                                          "EOT\n",
-                                          "[ -d /home/ec2-user/git ] || mkdir /home/ec2-user/git\n",
-                                          "git clone -b ",
-                                          {
-                                             "Ref" : "GitCloneBranch"
-                                          },
-                                          " ",
-                                          {
-                                             "Ref" : "GitCloneUrl"
-                                          },
-                                          " /home/ec2-user/git/minimal\n",
-                                          "cp -R /home/ec2-user/git/minimal/puppet/bastion /etc/puppet/modules/\n",
-                                          "puppet apply -e 'include bastion::install'\n",
-                                          "[ -d /home/ec2-user/.aws ] || mkdir -p /home/ec2-user/.aws\n",
-                                          "cat > /home/ec2-user/.aws/credentials <<EOT\n",
-                                          "[default]\n",
-                                          "aws_access_key_id = ",
-                                          {
-                                             "Ref" : "bastionuserKey"
-                                          },
-                                          "\n",
-                                          "aws_secret_access_key = ",
-                                          {
-                                             "Fn::GetAtt" :
-                                                [
-                                                   "bastionuserKey",
-                                                   "SecretAccessKey"
-                                                ]
-                                          },
-                                          "\n",
-                                          "EOT\n",
-                                          "cat > /home/ec2-user/.aws/config <<EOT\n",
-                                          "[default]\n",
-                                          "region = ",
-                                          {
-                                             "Ref" : "AWS::Region"
-                                          },
-                                          "\n",
-                                          "output = text\n",
-                                          "EOT\n",
-                                          "chown ec2-user /home/ec2-user/.aws\n",
-                                          "chown ec2-user /home/ec2-user/.aws/credentials\n",
-                                          "chown ec2-user /home/ec2-user/.aws/config\n",
-                                          ". /etc/profile.d/aws-apitools-common.sh\n"
-                                       ]
-                                    ]
-                              }
-                        },
-                     "NetworkInterfaces" :
-                        [
-                           {
-                              "DeleteOnTermination" : "true",
-                              "Description" : "Primary network interface",
-                              "DeviceIndex" : 0,
-                              "SubnetId" :
-                                 {
-                                    "Ref" : "MinimalVpcSubnetPublicA"
-                                 },
-                              "PrivateIpAddresses" :
-                                 [
-                                    {
-                                       "PrivateIpAddress" : "10.0.1.100",
-                                       "Primary" : "true"
-                                    }
-                                 ],
-                              "GroupSet" :
-                                 [
-                                    {
-                                       "Ref" : "SecurityGroupPublicSSH"
-                                    }
-                                 ],
-                              "AssociatePublicIpAddress" : "true"
-                           }
-                        ]
-                  }
-            },
-         "Group1" :
-            {
-               "Type" : "AWS::AutoScaling::AutoScalingGroup",
-               "Properties" :
-                  {
-                     "AvailabilityZones" :
-                        [
-                           {
-                              "Fn::Select" :
-                                 [
-                                    "0",
-                                    {
-                                       "Fn::GetAZs" : ""
-                                    }
-                                 ]
-                           },
-                           {
-                              "Fn::Select" :
-                                 [
-                                    {
-                                       "Fn::FindInMap" :
-                                          [
-                                             "RegionMap",
-                                             {
-                                                "Ref" : "AWS::Region"
-                                             },
-                                             "MAXZONE"
-                                          ]
-                                    },
-                                    {
-                                       "Fn::GetAZs" : ""
-                                    }
-                                 ]
-                           }
-                        ],
-                     "MinSize" :
-                        {
-                           "Ref" : "AutoScalingMin"
-                        },
-                     "MaxSize" :
-                        {
-                           "Ref" : "AutoScalingMax"
-                        },
-                     "DesiredCapacity" :
-                        {
-                           "Ref" : "AutoScalingMin"
-                        },
-                     "LoadBalancerNames" :
-                        [
-                           {
-                              "Ref" : "ELB"
-                           }
-                        ],
-                     "LaunchConfigurationName" :
-                        {
-                           "Ref" : "LaunchConfig"
-                        },
-                     "HealthCheckGracePeriod" : "300",
-                     "HealthCheckType" : "EC2",
-                     "VPCZoneIdentifier" :
-                        [
-                           {
-                              "Ref" : "MinimalVpcSubnetPrivateA"
-                           },
-                           {
-                              "Ref" : "MinimalVpcSubnetPrivateC"
-                           }
-                        ]
-                  }
-            },
-         "Group2" :
-            {
-               "Type" : "AWS::AutoScaling::AutoScalingGroup",
-               "Properties" :
-                  {
-                     "AvailabilityZones" :
-                        [
-                           {
-                              "Fn::Select" :
-                                 [
-                                    "0",
-                                    {
-                                       "Fn::GetAZs" : ""
-                                    }
-                                 ]
-                           },
-                           {
-                              "Fn::Select" :
-                                 [
-                                    {
-                                       "Fn::FindInMap" :
-                                          [
-                                             "RegionMap",
-                                             {
-                                                "Ref" : "AWS::Region"
-                                             },
-                                             "MAXZONE"
-                                          ]
-                                    },
-                                    {
-                                       "Fn::GetAZs" : ""
-                                    }
-                                 ]
-                           }
-                        ],
-                     "MinSize" : "0",
-                     "MaxSize" : "0",
-                     "DesiredCapacity" : "0",
-                     "LoadBalancerNames" :
-                        [
-                           {
-                              "Ref" : "ELB"
-                           }
-                        ],
-                     "LaunchConfigurationName" :
-                        {
-                           "Ref" : "LaunchConfig"
-                        },
-                     "HealthCheckGracePeriod" : "300",
-                     "HealthCheckType" : "EC2",
-                     "VPCZoneIdentifier" :
-                        [
-                           {
-                              "Ref" : "MinimalVpcSubnetPrivateA"
-                           },
-                           {
-                              "Ref" : "MinimalVpcSubnetPrivateC"
-                           }
-                        ]
-                  }
-            },
-         "LaunchConfig" :
-            {
-               "Type" : "AWS::AutoScaling::LaunchConfiguration",
-               "Properties" :
-                  {
-                     "KeyName" :
-                        {
-                           "Ref" : "KeyName"
-                        },
-                     "ImageId" :
-                        {
-                           "Fn::FindInMap" :
-                              [
-                                 "RegionMap",
-                                 {
-                                    "Ref" : "AWS::Region"
-                                 },
-                                 "AMI"
-                              ]
-                        },
-                     "SecurityGroups" :
-                        [
-                           {
-                              "Ref" : "SecurityGroupHiddenSSH"
-                           },
-                           {
-                              "Ref" : "SecurityGroupHTTPInternal"
-                           }
-                        ],
-                     "InstanceType" :
-                        {
-                           "Fn::FindInMap" :
-                              [
-                                 "InstanceMap",
-                                 {
-                                    "Ref" : "InstancePerformance"
-                                 },
-                                 "Application"
-                              ]
-                        },
-                     "UserData" :
-                        {
-                           "Fn::Base64" :
-                              {
-                                 "Fn::Join" :
-                                    [
-                                       "",
-                                       [
-                                          "#!/bin/bash -ex\n",
-                                          "yum -y install git\n",
-                                          "yum -y install puppet3\n",
-                                          "yum -y install httpd\n",
-                                          "service httpd start\n",
-                                          "[ -d /home/ec2-user/git ] || mkdir /home/ec2-user/git\n",
-                                          "git clone -b ",
-                                          {
-                                             "Ref" : "GitCloneBranch"
-                                          },
-                                          " ",
-                                          {
-                                             "Ref" : "GitCloneUrl"
-                                          },
-                                          " /home/ec2-user/git/minimal\n",
-                                          "cp -R /home/ec2-user/git/minimal/puppet/application /etc/puppet/modules/\n",
-                                          "puppet apply -e 'include application::install'\n",
-                                          "mkdir -p /home/ec2-user/.aws\n",
-                                          "cat > /home/ec2-user/.aws/credentials <<EOT\n",
-                                          "[default]\n",
-                                          "aws_access_key_id = ",
-                                          {
-                                             "Ref" : "applicationuserKey"
-                                          },
-                                          "\n",
-                                          "aws_secret_access_key = ",
-                                          {
-                                             "Fn::GetAtt" :
-                                                [
-                                                   "applicationuserKey",
-                                                   "SecretAccessKey"
-                                                ]
-                                          },
-                                          "\n",
-                                          "EOT\n",
-                                          "cat > /home/ec2-user/.aws/config <<EOT\n",
-                                          "[default]\n",
-                                          "region = ",
-                                          {
-                                             "Ref" : "AWS::Region"
-                                          },
-                                          "\n",
-                                          "output = text\n",
-                                          "EOT\n",
-                                          "chown ec2-user /home/ec2-user/.aws\n",
-                                          "chown ec2-user /home/ec2-user/.aws/credentials\n",
-                                          "chown ec2-user /home/ec2-user/.aws/config\n",
-                                          ". /etc/profile.d/aws-apitools-common.sh\n"
-                                       ]
-                                    ]
-                              }
-                        }
-                  }
-            },
-         "SecurityGroupPublicSSH" :
-            {
-               "Type" : "AWS::EC2::SecurityGroup",
-               "Properties" :
-                  {
-                     "GroupDescription" : "Accessible via SSH",
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "SecurityGroupIngress" :
-                        [
-                           {
-                              "IpProtocol" : "tcp",
-                              "FromPort" : "22",
-                              "ToPort" : "22",
-                              "CidrIp" :
-                                 {
-                                    "Ref" : "BastionIngressCidrIp"
-                                 }
-                           }
-                        ],
-                     "SecurityGroupEgress" :
-                        [
-                           {
-                              "IpProtocol" : "-1",
-                              "CidrIp" : "0.0.0.0/0"
-                           }
-                        ]
-                  }
-            },
-         "SecurityGroupHiddenSSH" :
-            {
-               "Type" : "AWS::EC2::SecurityGroup",
-               "Properties" :
-                  {
-                     "GroupDescription" : "SSH internal security group",
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "SecurityGroupEgress" :
-                        [
-                           {
-                              "IpProtocol" : "-1",
-                              "CidrIp" : "0.0.0.0/0"
-                           }
-                        ]
-                  }
-            },
-         "SecurityGroupELB" :
-            {
-               "Type" : "AWS::EC2::SecurityGroup",
-               "Properties" :
-                  {
-                     "GroupDescription" : "HTTP access at port 80",
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "SecurityGroupIngress" :
-                        [
-                           {
-                              "IpProtocol" : "tcp",
-                              "FromPort" : "80",
-                              "ToPort" : "80",
-                              "CidrIp" : "0.0.0.0/0"
-                           }
-                        ],
-                     "SecurityGroupEgress" :
-                        [
-                           {
-                              "IpProtocol" : "-1",
-                              "CidrIp" : "0.0.0.0/0"
-                           }
-                        ]
-                  }
-            },
-         "SecurityGroupHTTPInternal" :
-            {
-               "Type" : "AWS::EC2::SecurityGroup",
-               "Properties" :
-                  {
-                     "GroupDescription" : "ELB internal security group",
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "SecurityGroupEgress" :
-                        [
-                           {
-                              "IpProtocol" : "-1",
-                              "CidrIp" : "0.0.0.0/0"
-                           }
-                        ]
-                  }
-            },
-         "SecurityGroupNAT" :
-            {
-               "Type" : "AWS::EC2::SecurityGroup",
-               "Properties" :
-                  {
-                     "GroupDescription" : "Rules for allowing access to HA Nodes",
-                     "VpcId" :
-                        {
-                           "Ref" : "MinimalVpc"
-                        },
-                     "SecurityGroupIngress" :
-                        [
-                           {
-                              "IpProtocol" : "-1",
-                              "FromPort" : "0",
-                              "ToPort" : "65535",
-                              "CidrIp" : "10.0.0.0/16"
-                           }
-                        ],
-                     "SecurityGroupEgress" :
-                        [
-                           {
-                              "IpProtocol" : "-1",
-                              "FromPort" : "0",
-                              "ToPort" : "65535",
-                              "CidrIp" : "0.0.0.0/0"
-                           }
-                        ]
-                  }
-            },
-         "IngressNAT" :
-            {
-               "Type" : "AWS::EC2::SecurityGroupIngress",
-               "Properties" :
-                  {
-                     "GroupId" :
-                        {
-                           "Ref" : "SecurityGroupNAT"
-                        },
-                     "IpProtocol" : "icmp",
-                     "FromPort" : "-1",
-                     "ToPort" : "-1",
-                     "SourceSecurityGroupId" :
-                        {
-                           "Ref" : "SecurityGroupNAT"
-                        }
-                  }
-            },
-         "IngressHiddenSSH" :
-            {
-               "Type" : "AWS::EC2::SecurityGroupIngress",
-               "Properties" :
-                  {
-                     "GroupId" :
-                        {
-                           "Ref" : "SecurityGroupHiddenSSH"
-                        },
-                     "IpProtocol" : "tcp",
-                     "FromPort" : "22",
-                     "ToPort" : "22",
-                     "SourceSecurityGroupId" :
-                        {
-                           "Ref" : "SecurityGroupPublicSSH"
-                        }
-                  }
-            },
-         "IngressHTTPInternal" :
-            {
-               "Type" : "AWS::EC2::SecurityGroupIngress",
-               "Properties" :
-                  {
-                     "GroupId" :
-                        {
-                           "Ref" : "SecurityGroupHTTPInternal"
-                        },
-                     "IpProtocol" : "tcp",
-                     "FromPort" :
-                        {
-                           "Ref" : "WebServerPort"
-                        },
-                     "ToPort" :
-                        {
-                           "Ref" : "WebServerPort"
-                        },
-                     "SourceSecurityGroupId" :
-                        {
-                           "Ref" : "SecurityGroupELB"
-                        }
-                  }
-            },
-         "BastionDns" :
-            {
-               "Type" : "AWS::Route53::RecordSet",
-               "Condition" : "CreateDnsRecordBastion",
-               "Properties" :
-                  {
-                     "HostedZoneName" :
-                        {
-                           "Fn::Join" :
-                              [
-                                 "",
-                                 [
-                                    {
-                                       "Ref" : "DnsHostedZone"
-                                    }
-                                 ]
-                              ]
-                        },
-                     "Name" :
-                        {
-                           "Fn::Join" :
-                              [
-                                 "",
-                                 [
-                                    {
-                                       "Ref" : "AWS::StackName"
-                                    },
-                                    "-bastion.",
-                                    {
-                                       "Ref" : "AWS::Region"
-                                    },
-                                    ".",
-                                    {
-                                       "Ref" : "DnsHostedZone"
-                                    }
-                                 ]
-                              ]
-                        },
-                     "Type" : "CNAME",
-                     "TTL" : "300",
-                     "ResourceRecords" :
-                        [
-                           {
-                              "Fn::GetAtt" :
-                                 [
-                                    "Bastion",
-                                    "PublicDnsName"
-                                 ]
-                           }
-                        ]
-                  }
-            },
-         "ELBDns" :
-            {
-               "Type" : "AWS::Route53::RecordSet",
-               "Condition" : "CreateDnsRecordELB",
-               "Properties" :
-                  {
-                     "HostedZoneName" :
-                        {
-                           "Fn::Join" :
-                              [
-                                 "",
-                                 [
-                                    {
-                                       "Ref" : "DnsHostedZone"
-                                    }
-                                 ]
-                              ]
-                        },
-                     "Name" :
-                        {
-                           "Fn::Join" :
-                              [
-                                 "",
-                                 [
-                                    {
-                                       "Ref" : "AWS::StackName"
-                                    },
-                                    ".",
-                                    {
-                                       "Ref" : "AWS::Region"
-                                    },
-                                    ".",
-                                    {
-                                       "Ref" : "DnsHostedZone"
-                                    }
-                                 ]
-                              ]
-                        },
-                     "Type" : "CNAME",
-                     "TTL" : "300",
-                     "ResourceRecords" :
-                        [
-                           {
-                              "Fn::GetAtt" :
-                                 [
-                                    "ELB",
-                                    "DNSName"
-                                 ]
-                           }
-                        ]
-                  }
-            },
-         "CPUAlarmScaleUp1" :
-            {
-               "Type" : "AWS::CloudWatch::Alarm",
-               "Properties" :
-                  {
-                     "AlarmDescription" : "Raise alarm if CPU > 80% for 1 minute",
-                     "MetricName" : "CPUUtilization",
-                     "Namespace" : "AWS/EC2",
-                     "Statistic" : "Maximum",
-                     "Period" : "60",
-                     "EvaluationPeriods" : "1",
-                     "Threshold" : "80",
-                     "AlarmActions" :
-                        [
-                           {
-                              "Ref" : "ScaleUpPolicy1"
-                           }
-                        ],
-                     "Dimensions" :
-                        [
-                           {
-                              "Name" : "AutoScalingGroupName",
-                              "Value" :
-                                 {
-                                    "Ref" : "Group1"
-                                 }
-                           }
-                        ],
-                     "ComparisonOperator" : "GreaterThanThreshold"
-                  }
-            },
-         "CPUAlarmScaleUp2" :
-            {
-               "Type" : "AWS::CloudWatch::Alarm",
-               "Properties" :
-                  {
-                     "AlarmDescription" : "Raise alarm if CPU > 80% for 1 minute",
-                     "MetricName" : "CPUUtilization",
-                     "Namespace" : "AWS/EC2",
-                     "Statistic" : "Maximum",
-                     "Period" : "60",
-                     "EvaluationPeriods" : "1",
-                     "Threshold" : "80",
-                     "AlarmActions" :
-                        [
-                           {
-                              "Ref" : "ScaleUpPolicy2"
-                           }
-                        ],
-                     "Dimensions" :
-                        [
-                           {
-                              "Name" : "AutoScalingGroupName",
-                              "Value" :
-                                 {
-                                    "Ref" : "Group2"
-                                 }
-                           }
-                        ],
-                     "ComparisonOperator" : "GreaterThanThreshold"
-                  }
-            },
-         "CPUAlarmScaleDown1" :
-            {
-               "Type" : "AWS::CloudWatch::Alarm",
-               "Properties" :
-                  {
-                     "AlarmDescription" : "Raise alarm if CPU < 10% for 5 minutes",
-                     "MetricName" : "CPUUtilization",
-                     "Namespace" : "AWS/EC2",
-                     "Statistic" : "Average",
-                     "Period" : "60",
-                     "EvaluationPeriods" : "5",
-                     "Threshold" : "10",
-                     "AlarmActions" :
-                        [
-                           {
-                              "Ref" : "ScaleDownPolicy1"
-                           }
-                        ],
-                     "Dimensions" :
-                        [
-                           {
-                              "Name" : "AutoScalingGroupName",
-                              "Value" :
-                                 {
-                                    "Ref" : "Group1"
-                                 }
-                           }
-                        ],
-                     "ComparisonOperator" : "LessThanThreshold"
-                  }
-            },
-         "CPUAlarmScaleDown2" :
-            {
-               "Type" : "AWS::CloudWatch::Alarm",
-               "Properties" :
-                  {
-                     "AlarmDescription" : "Raise alarm if CPU < 10% for 5 minutes",
-                     "MetricName" : "CPUUtilization",
-                     "Namespace" : "AWS/EC2",
-                     "Statistic" : "Average",
-                     "Period" : "60",
-                     "EvaluationPeriods" : "5",
-                     "Threshold" : "10",
-                     "AlarmActions" :
-                        [
-                           {
-                              "Ref" : "ScaleDownPolicy2"
-                           }
-                        ],
-                     "Dimensions" :
-                        [
-                           {
-                              "Name" : "AutoScalingGroupName",
-                              "Value" :
-                                 {
-                                    "Ref" : "Group2"
-                                 }
-                           }
-                        ],
-                     "ComparisonOperator" : "LessThanThreshold"
-                  }
-            },
-         "ScaleUpPolicy1" :
-            {
-               "Type" : "AWS::AutoScaling::ScalingPolicy",
-               "Properties" :
-                  {
-                     "AdjustmentType" : "ChangeInCapacity",
-                     "AutoScalingGroupName" :
-                        {
-                           "Ref" : "Group1"
-                        },
-                     "Cooldown" : "60",
-                     "ScalingAdjustment" : "1"
-                  }
-            },
-         "ScaleUpPolicy2" :
-            {
-               "Type" : "AWS::AutoScaling::ScalingPolicy",
-               "Properties" :
-                  {
-                     "AdjustmentType" : "ChangeInCapacity",
-                     "AutoScalingGroupName" :
-                        {
-                           "Ref" : "Group2"
-                        },
-                     "Cooldown" : "60",
-                     "ScalingAdjustment" : "1"
-                  }
-            },
-         "ScaleDownPolicy1" :
-            {
-               "Type" : "AWS::AutoScaling::ScalingPolicy",
-               "Properties" :
-                  {
-                     "AdjustmentType" : "ChangeInCapacity",
-                     "AutoScalingGroupName" :
-                        {
-                           "Ref" : "Group1"
-                        },
-                     "Cooldown" : "60",
-                     "ScalingAdjustment" : "-1"
-                  }
-            },
-         "ScaleDownPolicy2" :
-            {
-               "Type" : "AWS::AutoScaling::ScalingPolicy",
-               "Properties" :
-                  {
-                     "AdjustmentType" : "ChangeInCapacity",
-                     "AutoScalingGroupName" :
-                        {
-                           "Ref" : "Group2"
-                        },
-                     "Cooldown" : "60",
-                     "ScalingAdjustment" : "-1"
-                  }
-            },
-         "bastionuser" :
-            {
-               "Type" : "AWS::IAM::User",
-               "Properties" :
-                  {
-                     "Path" : "/",
-                     "Policies" :
-                        [
-                           {
-                              "PolicyName" : "bastionuseraccess",
-                              "PolicyDocument" :
-                                 {
-                                    "Version" : "2012-10-17",
-                                    "Statement" :
-                                       [
-                                          {
-                                             "Effect" : "Allow",
-                                             "Action" : "autoscaling:DescribeAutoScalingGroups",
-                                             "Resource" : "*"
-                                          },
-                                          {
-                                             "Effect" : "Allow",
-                                             "Action" : "autoscaling:UpdateAutoScalingGroup",
-                                             "Resource" : "*"
-                                          },
-                                          {
-                                             "Effect" : "Allow",
-                                             "Action" : "elasticloadbalancing:DescribeInstanceHealth",
-                                             "Resource" : "*"
-                                          }
-                                       ]
-                                 }
-                           }
-                        ]
-                  }
-            },
-         "bastionuserKey" :
-            {
-               "Type" : "AWS::IAM::AccessKey",
-               "Properties" :
-                  {
-                     "Serial" : "0",
-                     "Status" : "Active",
-                     "UserName" :
-                        {
-                           "Ref" : "bastionuser"
-                        }
-                  },
-               "DependsOn" : "bastionuser"
-            },
-         "applicationuser" :
-            {
-               "Type" : "AWS::IAM::User",
-               "Properties" :
-                  {
-                     "Path" : "/",
-                     "Policies" :
-                        [
-                           {
-                              "PolicyName" : "applicationuseraccess",
-                              "PolicyDocument" :
-                                 {
-                                    "Version" : "2012-10-17",
-                                    "Statement" :
-                                       [
-                                          {
-                                             "Effect" : "Deny",
-                                             "Action" : "*",
-                                             "Resource" : "*"
-                                          }
-                                       ]
-                                 }
-                           }
-                        ]
-                  }
-            },
-         "applicationuserKey" :
-            {
-               "Type" : "AWS::IAM::AccessKey",
-               "Properties" :
-                  {
-                     "Serial" : "0",
-                     "Status" : "Active",
-                     "UserName" :
-                        {
-                           "Ref" : "applicationuser"
-                        }
-                  },
-               "DependsOn" : "applicationuser"
-            }
-      },
-   "Outputs" :
-      {
-         "LoadBalancerARecord" :
-            {
-               "Description" : "Load balancer A Record",
-               "Value" :
-                  {
-                     "Fn::Join" :
-                        [
-                           "",
-                           [
-                              "http://",
-                              {
-                                 "Fn::GetAtt" :
-                                    [
-                                       "ELB",
-                                       "DNSName"
-                                    ]
-                              }
-                           ]
-                        ]
-                  }
-            },
-         "LoadBalancerCName" :
-            {
-               "Description" : "Load balancer CNAME",
-               "Value" :
-                  {
-                     "Fn::Join" :
-                        [
-                           "",
-                           [
-                              {
-                                 "Ref" : "AWS::StackName"
-                              },
-                              ".",
-                              {
-                                 "Ref" : "AWS::Region"
-                              },
-                              ".",
-                              {
-                                 "Ref" : "DnsHostedZone"
-                              }
-                           ]
-                        ]
-                  }
-            },
-         "BastionDnsName" :
-            {
-               "Description" : "Bastion DNS name",
-               "Value" :
-                  {
-                     "Fn::GetAtt" :
-                        [
-                           "Bastion",
-                           "PublicDnsName"
-                        ]
-                  }
-            },
-         "BastionCName" :
-            {
-               "Description" : "Bastion CNAME",
-               "Value" :
-                  {
-                     "Fn::Join" :
-                        [
-                           "",
-                           [
-                              {
-                                 "Ref" : "AWS::StackName"
-                              },
-                              "-bastion.",
-                              {
-                                 "Ref" : "AWS::Region"
-                              },
-                              ".",
-                              {
-                                 "Ref" : "DnsHostedZone"
-                              }
-                           ]
-                        ]
-                  }
-            },
-         "BastionID" :
-            {
-               "Description" : "Bastion instance ID",
-               "Value" :
-                  {
-                     "Ref" : "Bastion"
-                  }
-            },
-         "KeyName" :
-            {
-               "Description" : "Key name for SSH access",
-               "Value" :
-                  {
-                     "Ref" : "KeyName"
-                  }
-            },
-         "GitCloneUrl" :
-            {
-               "Description" : "Git clone URL",
-               "Value" :
-                  {
-                     "Ref" : "GitCloneUrl"
-                  }
-            }
-      },
-   "Description" : "Minimal scalable template"
-}
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  AutoScalingMax:
+    Description: Maximum number of application servers
+    Type: Number
+    Default: '1'
+    MinValue: '1'
+    MaxValue: '16'
+    ConstraintDescription: Must be between 1 and 16
+  AutoScalingMin:
+    Description: Minimum number of application servers
+    Type: Number
+    Default: '1'
+    MinValue: '1'
+    MaxValue: '8'
+    ConstraintDescription: Must be between 1 and 8
+  BastionIngressCidrIp:
+    Description: CIDR range for SSH access to bastion host
+    Type: String
+    Default: 0.0.0.0/0
+    ConstraintDescription: CIDR range should be as narrow as possible
+  DnsHostedZone:
+    Type: String
+    Description: The DNS name of an existing Amazon Route 53 hosted zone
+  DnsRecordBastion:
+    Type: String
+    Description: Route 53 record for the bastion server req'd?
+    Default: 'true'
+    AllowedValues:
+    - 'true'
+    - 'false'
+    ConstraintDescription: Must be true or false
+  DnsRecordELB:
+    Type: String
+    Description: Route 53 record for the load balancer req'd?
+    Default: 'true'
+    AllowedValues:
+    - 'true'
+    - 'false'
+    ConstraintDescription: Must be true or false
+  GitCloneBranch:
+    Description: Git Branch
+    Type: String
+    Default: master
+  GitCloneUrl:
+    Description: URL for Git repo
+    Type: String
+    Default: https://github.com/gerald1248/minimal-scalable-template.git
+  InstancePerformance:
+    Description: Toggle for default or low performance
+    Type: String
+    Default: default
+    AllowedPattern: "(default|low)"
+    ConstraintDescription: set to 'default' or 'low'; choose 'default' for free tier
+  KeyName:
+    Description: Existing EC2 KeyPair for SSH access to the bastion instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair
+  WebServerPort:
+    Description: TCP/IP port of the web server
+    Type: String
+    Default: '80'
+Mappings:
+  RegionMap:
+    eu-west-1:
+      AMI: ami-10e43b63
+      AMINAT: ami-ef76e898
+      MAXZONE: '2'
+  InstanceMap:
+    default:
+      Application: t2.micro
+      Bastion: t2.micro
+      Nat: t2.micro
+    low:
+      Application: t2.nano
+      Bastion: t2.nano
+      Nat: t2.nano
+Conditions:
+  CreateDnsRecordELB:
+    Fn::Equals:
+    - Ref: DnsRecordELB
+    - 'true'
+  CreateDnsRecordBastion:
+    Fn::Equals:
+    - Ref: DnsRecordBastion
+    - 'true'
+Resources:
+  MinimalVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      InstanceTenancy: default
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      Tags:
+      - Key: Name
+        Value: MinimalVpc
+  MinimalVpcSubnetPublicA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      VpcId:
+        Ref: MinimalVpc
+      Tags:
+      - Key: Name
+        Value: MinimalVpc_a_pbl
+  MinimalVpcSubnetPublicB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      VpcId:
+        Ref: MinimalVpc
+      Tags:
+      - Key: Name
+        Value: MinimalVpc_b_pbl
+  MinimalVpcSubnetPublicC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone:
+        Fn::Select:
+        - Fn::FindInMap:
+          - RegionMap
+          - Ref: AWS::Region
+          - MAXZONE
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      VpcId:
+        Ref: MinimalVpc
+      Tags:
+      - Key: Name
+        Value: MinimalVpc_c_pbl
+  MinimalVpcSubnetPrivateA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      VpcId:
+        Ref: MinimalVpc
+      Tags:
+      - Key: Name
+        Value: MinimalVpc_a_prv
+  MinimalVpcSubnetPrivateB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.5.0/24
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      VpcId:
+        Ref: MinimalVpc
+      Tags:
+      - Key: Name
+        Value: MinimalVpc_b_prv
+  MinimalVpcSubnetPrivateC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.6.0/24
+      AvailabilityZone:
+        Fn::Select:
+        - Fn::FindInMap:
+          - RegionMap
+          - Ref: AWS::Region
+          - MAXZONE
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      VpcId:
+        Ref: MinimalVpc
+      Tags:
+      - Key: Name
+        Value: MinimalVpc_c_prv
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: {}
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: MinimalVpc
+      InternetGatewayId:
+        Ref: InternetGateway
+  RoutingTablePublic:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: MinimalVpc
+  RoutingTablePrivate:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: MinimalVpc
+  OutboundPublicSubnet:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId:
+        Ref: RoutingTablePublic
+      GatewayId:
+        Ref: InternetGateway
+  OutboundPrivateSubnet:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId:
+        Ref: RoutingTablePrivate
+      InstanceId:
+        Ref: Nat
+  SubnetRouteAssocPublicA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: RoutingTablePublic
+      SubnetId:
+        Ref: MinimalVpcSubnetPublicA
+  SubnetRouteAssocPublicB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: RoutingTablePublic
+      SubnetId:
+        Ref: MinimalVpcSubnetPublicB
+  SubnetRouteAssocPublicC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: RoutingTablePublic
+      SubnetId:
+        Ref: MinimalVpcSubnetPublicC
+  SubnetRouteAssocPrivateA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: RoutingTablePrivate
+      SubnetId:
+        Ref: MinimalVpcSubnetPrivateA
+  SubnetRouteAssocPrivateB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: RoutingTablePrivate
+      SubnetId:
+        Ref: MinimalVpcSubnetPrivateB
+  SubnetRouteAssocPrivateC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: RoutingTablePrivate
+      SubnetId:
+        Ref: MinimalVpcSubnetPrivateC
+  NatEIP:
+    Type: AWS::EC2::EIP
+    DependsOn:
+    - InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      InstanceId:
+        Ref: Nat
+  Nat:
+    Type: AWS::EC2::Instance
+    Properties:
+      SourceDestCheck: 'false'
+      DisableApiTermination: 'false'
+      ImageId:
+        Fn::FindInMap:
+        - RegionMap
+        - Ref: AWS::Region
+        - AMINAT
+      InstanceType:
+        Fn::FindInMap:
+        - InstanceMap
+        - Ref: InstancePerformance
+        - Nat
+      KeyName:
+        Ref: KeyName
+      Monitoring: 'true'
+      Tags:
+      - Key: Name
+        Value: vpc-nat
+      NetworkInterfaces:
+      - DeleteOnTermination: 'true'
+        DeviceIndex: 0
+        SubnetId:
+          Ref: MinimalVpcSubnetPublicC
+        PrivateIpAddresses:
+        - PrivateIpAddress: 10.0.3.110
+          Primary: 'true'
+        GroupSet:
+        - Ref: SecurityGroupNAT
+  ELB:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      Instances: []
+      CrossZone: true
+      Subnets:
+      - Ref: MinimalVpcSubnetPublicA
+      - Ref: MinimalVpcSubnetPublicC
+      HealthCheck:
+        Target:
+          Fn::Join:
+          - ''
+          - - 'TCP:'
+            - Ref: WebServerPort
+        HealthyThreshold: '2'
+        UnhealthyThreshold: '2'
+        Interval: '30'
+        Timeout: '5'
+      SecurityGroups:
+      - Ref: SecurityGroupELB
+      Listeners:
+      - InstancePort:
+          Ref: WebServerPort
+        LoadBalancerPort: '80'
+        Protocol: HTTP
+        InstanceProtocol: HTTP
+        PolicyNames:
+        - minimalCookieStickinessPolicy
+      LBCookieStickinessPolicy:
+      - PolicyName: minimalCookieStickinessPolicy
+        CookieExpirationPeriod: '60'
+      ConnectionDrainingPolicy:
+        Enabled: 'true'
+        Timeout: '30'
+  Bastion:
+    Type: AWS::EC2::Instance
+    Properties:
+      DisableApiTermination: 'false'
+      ImageId:
+        Fn::FindInMap:
+        - RegionMap
+        - Ref: AWS::Region
+        - AMI
+      InstanceType:
+        Fn::FindInMap:
+        - InstanceMap
+        - Ref: InstancePerformance
+        - Bastion
+      KeyName:
+        Ref: KeyName
+      Monitoring: 'true'
+      Tags:
+      - Key: Name
+        Value: vpc-bastion
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - ''
+          - - "#!/usr/bin/env bash\n"
+            - "yum -y install git\n"
+            - "yum -y install puppet3\n"
+            - "pip install boto3\n"
+            - "[ -d /etc/facter/facts.d ] || mkdir -p /etc/facter/facts.d\n"
+            - "cat > /etc/facter/facts.d/stack_ids.txt <<EOT\n"
+            - auto_scaling_group1=
+            - Ref: Group1
+            - "\n"
+            - auto_scaling_group2=
+            - Ref: Group2
+            - "\n"
+            - elastic_load_balancer=
+            - Ref: ELB
+            - "\n"
+            - "EOT\n"
+            - "[ -d /home/ec2-user/git ] || mkdir /home/ec2-user/git\n"
+            - 'git clone -b '
+            - Ref: GitCloneBranch
+            - " "
+            - Ref: GitCloneUrl
+            - " /home/ec2-user/git/minimal\n"
+            - "cp -R /home/ec2-user/git/minimal/puppet/bastion /etc/puppet/modules/\n"
+            - "puppet apply -e ''include bastion::install''\n"
+            - "[ -d /home/ec2-user/.aws ] || mkdir -p /home/ec2-user/.aws\n"
+            - "cat > /home/ec2-user/.aws/credentials <<EOT\n"
+            - "[default]\n"
+            - 'aws_access_key_id = '
+            - Ref: bastionuserKey
+            - "\n"
+            - 'aws_secret_access_key = '
+            - Fn::GetAtt:
+              - bastionuserKey
+              - SecretAccessKey
+            - "\n"
+            - "EOT\n"
+            - "cat > /home/ec2-user/.aws/config <<EOT\n"
+            - "[default]\n"
+            - 'region = '
+            - Ref: AWS::Region
+            - "\n"
+            - "output = text\n"
+            - "EOT\n"
+            - "chown ec2-user /home/ec2-user/.aws\n"
+            - "chown ec2-user /home/ec2-user/.aws/credentials\n"
+            - "chown ec2-user /home/ec2-user/.aws/config\n"
+            - ". /etc/profile.d/aws-apitools-common.sh\n"
+      NetworkInterfaces:
+      - DeleteOnTermination: 'true'
+        Description: Primary network interface
+        DeviceIndex: 0
+        SubnetId:
+          Ref: MinimalVpcSubnetPublicA
+        PrivateIpAddresses:
+        - PrivateIpAddress: 10.0.1.100
+          Primary: 'true'
+        GroupSet:
+        - Ref: SecurityGroupPublicSSH
+        AssociatePublicIpAddress: 'true'
+  Group1:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+      - Fn::Select:
+        - '0'
+        - Fn::GetAZs: ''
+      - Fn::Select:
+        - Fn::FindInMap:
+          - RegionMap
+          - Ref: AWS::Region
+          - MAXZONE
+        - Fn::GetAZs: ''
+      MinSize:
+        Ref: AutoScalingMin
+      MaxSize:
+        Ref: AutoScalingMax
+      DesiredCapacity:
+        Ref: AutoScalingMin
+      LoadBalancerNames:
+      - Ref: ELB
+      LaunchConfigurationName:
+        Ref: LaunchConfig
+      HealthCheckGracePeriod: '300'
+      HealthCheckType: EC2
+      VPCZoneIdentifier:
+      - Ref: MinimalVpcSubnetPrivateA
+      - Ref: MinimalVpcSubnetPrivateC
+  Group2:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+      - Fn::Select:
+        - '0'
+        - Fn::GetAZs: ''
+      - Fn::Select:
+        - Fn::FindInMap:
+          - RegionMap
+          - Ref: AWS::Region
+          - MAXZONE
+        - Fn::GetAZs: ''
+      MinSize: '0'
+      MaxSize: '0'
+      DesiredCapacity: '0'
+      LoadBalancerNames:
+      - Ref: ELB
+      LaunchConfigurationName:
+        Ref: LaunchConfig
+      HealthCheckGracePeriod: '300'
+      HealthCheckType: EC2
+      VPCZoneIdentifier:
+      - Ref: MinimalVpcSubnetPrivateA
+      - Ref: MinimalVpcSubnetPrivateC
+  LaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      KeyName:
+        Ref: KeyName
+      ImageId:
+        Fn::FindInMap:
+        - RegionMap
+        - Ref: AWS::Region
+        - AMI
+      SecurityGroups:
+      - Ref: SecurityGroupHiddenSSH
+      - Ref: SecurityGroupHTTPInternal
+      InstanceType:
+        Fn::FindInMap:
+        - InstanceMap
+        - Ref: InstancePerformance
+        - Application
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - ''
+          - - "#!/bin/bash -ex\n"
+            - "yum -y install git\n"
+            - "yum -y install puppet3\n"
+            - "yum -y install httpd\n"
+            - "systemctl start httpd.service\n"
+            - "[ -d /home/ec2-user/git ] || mkdir /home/ec2-user/git\n"
+            - 'git clone -b '
+            - Ref: GitCloneBranch
+            - " "
+            - Ref: GitCloneUrl
+            - " /home/ec2-user/git/minimal\n"
+            - "cp -R /home/ec2-user/git/minimal/puppet/application /etc/puppet/modules/\n"
+            - "puppet apply -e ''include application::install''\n"
+            - "mkdir -p /home/ec2-user/.aws\n"
+            - "cat > /home/ec2-user/.aws/credentials <<EOT\n"
+            - "[default]\n"
+            - 'aws_access_key_id = '
+            - Ref: applicationuserKey
+            - "\n"
+            - 'aws_secret_access_key = '
+            - Fn::GetAtt:
+              - applicationuserKey
+              - SecretAccessKey
+            - "\n"
+            - "EOT\n"
+            - "cat > /home/ec2-user/.aws/config <<EOT\n"
+            - "[default]\n"
+            - 'region = '
+            - Ref: AWS::Region
+            - "\n"
+            - "output = text\n"
+            - "EOT\n"
+            - "chown ec2-user /home/ec2-user/.aws\n"
+            - "chown ec2-user /home/ec2-user/.aws/credentials\n"
+            - "chown ec2-user /home/ec2-user/.aws/config\n"
+            - ". /etc/profile.d/aws-apitools-common.sh\n"
+  SecurityGroupPublicSSH:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Accessible via SSH
+      VpcId:
+        Ref: MinimalVpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp:
+          Ref: BastionIngressCidrIp
+      SecurityGroupEgress:
+      - IpProtocol: "-1"
+        CidrIp: 0.0.0.0/0
+  SecurityGroupHiddenSSH:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SSH internal security group
+      VpcId:
+        Ref: MinimalVpc
+      SecurityGroupEgress:
+      - IpProtocol: "-1"
+        CidrIp: 0.0.0.0/0
+  SecurityGroupELB:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTP access at port 80
+      VpcId:
+        Ref: MinimalVpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: "-1"
+        CidrIp: 0.0.0.0/0
+  SecurityGroupHTTPInternal:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ELB internal security group
+      VpcId:
+        Ref: MinimalVpc
+      SecurityGroupEgress:
+      - IpProtocol: "-1"
+        CidrIp: 0.0.0.0/0
+  SecurityGroupNAT:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Rules for allowing access to HA Nodes
+      VpcId:
+        Ref: MinimalVpc
+      SecurityGroupIngress:
+      - IpProtocol: "-1"
+        FromPort: '0'
+        ToPort: '65535'
+        CidrIp: 10.0.0.0/16
+      SecurityGroupEgress:
+      - IpProtocol: "-1"
+        FromPort: '0'
+        ToPort: '65535'
+        CidrIp: 0.0.0.0/0
+  IngressNAT:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: SecurityGroupNAT
+      IpProtocol: icmp
+      FromPort: "-1"
+      ToPort: "-1"
+      SourceSecurityGroupId:
+        Ref: SecurityGroupNAT
+  IngressHiddenSSH:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: SecurityGroupHiddenSSH
+      IpProtocol: tcp
+      FromPort: '22'
+      ToPort: '22'
+      SourceSecurityGroupId:
+        Ref: SecurityGroupPublicSSH
+  IngressHTTPInternal:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: SecurityGroupHTTPInternal
+      IpProtocol: tcp
+      FromPort:
+        Ref: WebServerPort
+      ToPort:
+        Ref: WebServerPort
+      SourceSecurityGroupId:
+        Ref: SecurityGroupELB
+  BastionDns:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsRecordBastion
+    Properties:
+      HostedZoneName:
+        Fn::Join:
+        - ''
+        - - Ref: DnsHostedZone
+      Name:
+        Fn::Join:
+        - ''
+        - - Ref: AWS::StackName
+          - "-bastion."
+          - Ref: AWS::Region
+          - "."
+          - Ref: DnsHostedZone
+      Type: CNAME
+      TTL: '300'
+      ResourceRecords:
+      - Fn::GetAtt:
+        - Bastion
+        - PublicDnsName
+  ELBDns:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsRecordELB
+    Properties:
+      HostedZoneName:
+        Fn::Join:
+        - ''
+        - - Ref: DnsHostedZone
+      Name:
+        Fn::Join:
+        - ''
+        - - Ref: AWS::StackName
+          - "."
+          - Ref: AWS::Region
+          - "."
+          - Ref: DnsHostedZone
+      Type: CNAME
+      TTL: '300'
+      ResourceRecords:
+      - Fn::GetAtt:
+        - ELB
+        - DNSName
+  CPUAlarmScaleUp1:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Raise alarm if CPU > 80% for 1 minute
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: '60'
+      EvaluationPeriods: '1'
+      Threshold: '80'
+      AlarmActions:
+      - Ref: ScaleUpPolicy1
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: Group1
+      ComparisonOperator: GreaterThanThreshold
+  CPUAlarmScaleUp2:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Raise alarm if CPU > 80% for 1 minute
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: '60'
+      EvaluationPeriods: '1'
+      Threshold: '80'
+      AlarmActions:
+      - Ref: ScaleUpPolicy2
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: Group2
+      ComparisonOperator: GreaterThanThreshold
+  CPUAlarmScaleDown1:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Raise alarm if CPU < 10% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '5'
+      Threshold: '10'
+      AlarmActions:
+      - Ref: ScaleDownPolicy1
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: Group1
+      ComparisonOperator: LessThanThreshold
+  CPUAlarmScaleDown2:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Raise alarm if CPU < 10% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '5'
+      Threshold: '10'
+      AlarmActions:
+      - Ref: ScaleDownPolicy2
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: Group2
+      ComparisonOperator: LessThanThreshold
+  ScaleUpPolicy1:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName:
+        Ref: Group1
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+  ScaleUpPolicy2:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName:
+        Ref: Group2
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+  ScaleDownPolicy1:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName:
+        Ref: Group1
+      Cooldown: '60'
+      ScalingAdjustment: "-1"
+  ScaleDownPolicy2:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName:
+        Ref: Group2
+      Cooldown: '60'
+      ScalingAdjustment: "-1"
+  bastionuser:
+    Type: AWS::IAM::User
+    Properties:
+      Path: "/"
+      Policies:
+      - PolicyName: bastionuseraccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: autoscaling:DescribeAutoScalingGroups
+            Resource: "*"
+          - Effect: Allow
+            Action: autoscaling:UpdateAutoScalingGroup
+            Resource: "*"
+          - Effect: Allow
+            Action: elasticloadbalancing:DescribeInstanceHealth
+            Resource: "*"
+  bastionuserKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      Serial: '0'
+      Status: Active
+      UserName:
+        Ref: bastionuser
+    DependsOn: bastionuser
+  applicationuser:
+    Type: AWS::IAM::User
+    Properties:
+      Path: "/"
+      Policies:
+      - PolicyName: applicationuseraccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Deny
+            Action: "*"
+            Resource: "*"
+  applicationuserKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      Serial: '0'
+      Status: Active
+      UserName:
+        Ref: applicationuser
+    DependsOn: applicationuser
+Outputs:
+  LoadBalancerARecord:
+    Description: Load balancer A Record
+    Value:
+      Fn::Join:
+      - ''
+      - - http://
+        - Fn::GetAtt:
+          - ELB
+          - DNSName
+  LoadBalancerCName:
+    Description: Load balancer CNAME
+    Value:
+      Fn::Join:
+      - ''
+      - - Ref: AWS::StackName
+        - "."
+        - Ref: AWS::Region
+        - "."
+        - Ref: DnsHostedZone
+  BastionDnsName:
+    Description: Bastion DNS name
+    Value:
+      Fn::GetAtt:
+      - Bastion
+      - PublicDnsName
+  BastionCName:
+    Description: Bastion CNAME
+    Value:
+      Fn::Join:
+      - ''
+      - - Ref: AWS::StackName
+        - "-bastion."
+        - Ref: AWS::Region
+        - "."
+        - Ref: DnsHostedZone
+  BastionID:
+    Description: Bastion instance ID
+    Value:
+      Ref: Bastion
+  KeyName:
+    Description: Key name for SSH access
+    Value:
+      Ref: KeyName
+  GitCloneUrl:
+    Description: Git clone URL
+    Value:
+      Ref: GitCloneUrl
+Description: Minimal scalable template
+
