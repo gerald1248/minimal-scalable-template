@@ -17,7 +17,7 @@ If you have an AWS account, a Route 53 hosted zone and a key pair, you're ready 
 
 * stack name (e.g. stack01)
 * Route 53 hosted zone (e.g. example.com.)
-* key pair (e.g. `ci\_user`)
+* key pair (e.g. `ci_user`)
 
 Press `Next` again and, on the next screen, acknowledge that the template will create IAM users. Pressing `Create` will build the stack.
 
@@ -43,11 +43,9 @@ For the default values given above, this adds up to:
 
 The application is of course a stub and bound to disappoint fans of elaborate web design.
 
-If you must know, the application is as plain and simple as [this](https://rawgit.com/gerald1248/minimal-scalable-template/master/puppet/application/files/docroot/index.html).
-
 How do I deploy the latest code?
 --------------------------------
-To keep things simple 'new code' here means the Puppet module `application` and/or `bastion` has changed in the specified Git repo and branch. (Real life scenarios are likely to involve local `rpm` or `apt` repos and mirrors, S3 buckets, and perhaps a neat staging process with multiple puppet masters. The trouble is that these add a lot of dependencies that don't suit a *minimal* template.) To deploy your merged changes, instruct your preferred CI tool (Jenkins, say) to perform the following steps:
+To keep things simple 'new code' here means the `application` has changed in the specified Git repo and branch. (Real life scenarios are likely to involve local `rpm` or `apt` repos and mirrors, S3 buckets, and perhaps a neat staging process. The trouble is that these add a lot of dependencies that don't suit a *minimal* template.) To deploy your merged changes, instruct your preferred CI tool (Jenkins, say) to perform the following steps:
 
     # let's assume:
     # the stack name is stack01
@@ -78,9 +76,9 @@ If you wish to use the bastion server as a jump host to the private subnets, che
     # the application is part of a scaling group,
     # so the IP address isn't fixed 
     ssh-add ~/.ssh/ci_user.pem
-    ssh -A -i ~/.ssh/ci_user.pem -o StrictHostKeyChecking=no ec2-user@stack01-bastion.eu-west-1.example.com 
-    # the application server has IP 10.0.4.100
-    ssh 10.0.4.100
+    ssh -A -o StrictHostKeyChecking=no ec2-user@stack01-bastion.eu-west-1.example.com 
+    # the application server has IP 10.0.4.103
+    ssh 10.0.4.103
 
 Couldn't you have used (Go|Node.js|Ruby)?
 -----------------------------------------------------
@@ -93,10 +91,6 @@ Mostly to avoid code bloat. CloudFormation templates are unwieldy at the best of
 But wait, what about the other parameters?
 ------------------------------------------
 There's no need to worry about the other parameters right away. For example, there's a low-cost instance option in addition to the default. Counter-intuitively free tier users only have access to the slightly more expensive (micro not nano) option, making it a useful default.
-
-The rspec puppet tests aren't working on my computer 
-----------------------------------------------------
-The aim is for the tests to run successfully with 100% coverage; depending on your OS and system configuration, you may need to tweak and pin different ruby and puppet versions. `rvm` and `bundler` are your friends.
 
 I've spotted a bug
 ------------------

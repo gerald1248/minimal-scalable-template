@@ -364,7 +364,6 @@ Resources:
           - ''
           - - "#!/usr/bin/env bash\n"
             - "yum -y install git\n"
-            - "yum -y install puppet3\n"
             - "pip install boto3\n"
             - "[ -d /etc/facter/facts.d ] || mkdir -p /etc/facter/facts.d\n"
             - "cat > /etc/facter/facts.d/stack_ids.txt <<EOT\n"
@@ -384,8 +383,7 @@ Resources:
             - " "
             - Ref: GitCloneUrl
             - " /home/ec2-user/git/minimal\n"
-            - "cp -R /home/ec2-user/git/minimal/puppet/bastion /etc/puppet/modules/\n"
-            - "puppet apply -e ''include bastion::install''\n"
+            - "cp -R /home/ec2-user/git/minimal/bastion/scripts /home/ec2-user/\n"
             - "[ -d /home/ec2-user/.aws ] || mkdir -p /home/ec2-user/.aws\n"
             - "cat > /home/ec2-user/.aws/credentials <<EOT\n"
             - "[default]\n"
@@ -449,6 +447,10 @@ Resources:
       VPCZoneIdentifier:
       - Ref: MinimalVpcSubnetPrivateA
       - Ref: MinimalVpcSubnetPrivateC
+      Tags:
+      - Key: Name
+        Value: frontend-group1
+        PropagateAtLaunch: 'true'
   Group2:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -474,6 +476,10 @@ Resources:
       VPCZoneIdentifier:
       - Ref: MinimalVpcSubnetPrivateA
       - Ref: MinimalVpcSubnetPrivateC
+      Tags:
+      - Key: Name
+        Value: frontend-group2
+        PropagateAtLaunch: 'true'
   LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
@@ -498,17 +504,15 @@ Resources:
           - ''
           - - "#!/bin/bash -ex\n"
             - "yum -y install git\n"
-            - "yum -y install puppet3\n"
             - "yum -y install httpd\n"
-            - "systemctl start httpd.service\n"
+            - "service httpd start\n"
             - "[ -d /home/ec2-user/git ] || mkdir /home/ec2-user/git\n"
             - 'git clone -b '
             - Ref: GitCloneBranch
             - " "
             - Ref: GitCloneUrl
             - " /home/ec2-user/git/minimal\n"
-            - "cp -R /home/ec2-user/git/minimal/puppet/application /etc/puppet/modules/\n"
-            - "puppet apply -e ''include application::install''\n"
+            - "cp -R /home/ec2-user/git/minimal/application/docroot/* /var/www/html/\n"
             - "mkdir -p /home/ec2-user/.aws\n"
             - "cat > /home/ec2-user/.aws/credentials <<EOT\n"
             - "[default]\n"
