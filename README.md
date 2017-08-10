@@ -43,8 +43,6 @@ For the default values given above, this adds up to:
 
 The application is of course a stub and bound to disappoint fans of elaborate web design.
 
-If you must know, the application is as plain and simple as [this](https://rawgit.com/gerald1248/minimal-scalable-template/master/puppet/application/files/docroot/index.html).
-
 How do I deploy the latest code?
 --------------------------------
 To keep things simple 'new code' here means the `application` has changed in the specified Git repo and branch. (Real life scenarios are likely to involve local `rpm` or `apt` repos and mirrors, S3 buckets, and perhaps a neat staging process. The trouble is that these add a lot of dependencies that don't suit a *minimal* template.) To deploy your merged changes, instruct your preferred CI tool (Jenkins, say) to perform the following steps:
