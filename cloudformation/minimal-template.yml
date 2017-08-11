@@ -61,6 +61,14 @@ Parameters:
     Description: TCP/IP port of the web server
     Type: String
     Default: '80'
+  SlackChannel:
+    Description: Notification channel
+    Type: String
+    Default: ''
+  SlackHookUrl:
+    Description: Predefined hook URL
+    Type: String
+    Default: ''
 Mappings:
   RegionMap:
     eu-west-1:
@@ -78,13 +86,11 @@ Mappings:
       Nat: t2.nano
 Conditions:
   CreateDnsRecordELB:
-    Fn::Equals:
-    - Ref: DnsRecordELB
-    - 'true'
+    !Equals [!Ref DnsRecordELB, 'true']
   CreateDnsRecordBastion:
-    Fn::Equals:
-    - Ref: DnsRecordBastion
-    - 'true'
+    !Equals [!Ref DnsRecordBastion, 'true']
+  CreateSlackIntegration:
+    !Not [!Equals [!Ref SlackHookUrl, '']]
 Resources:
   MinimalVpc:
     Type: AWS::EC2::VPC
@@ -365,8 +371,7 @@ Resources:
           - - "#!/usr/bin/env bash\n"
             - "yum -y install git\n"
             - "pip install boto3\n"
-            - "[ -d /etc/facter/facts.d ] || mkdir -p /etc/facter/facts.d\n"
-            - "cat > /etc/facter/facts.d/stack_ids.txt <<EOT\n"
+            - "cat > /home/ec2-user/stack_ids.txt <<EOT\n"
             - auto_scaling_group1=
             - Ref: Group1
             - "\n"
@@ -821,6 +826,108 @@ Resources:
       UserName:
         Ref: applicationuser
     DependsOn: applicationuser
+  AlertLambda:
+    Type: AWS::Lambda::Function
+    Condition: CreateSlackIntegration
+    Properties:
+      Description: passes subject and message pairs to a predefined Slack channel
+      Handler: index.handler
+      Role: !GetAtt AlertLambdaExecutionRole.Arn
+      Code:
+        S3Bucket: post-slack-alert
+        S3Key: index.zip
+      Runtime: nodejs4.3
+      Environment:
+        Variables:
+          dryRun: false
+          slackChannel: !Ref SlackChannel
+          hookUrl: !Ref SlackHookUrl
+  AlertTopic:
+    Type: "AWS::SNS::Topic"
+    Condition: CreateSlackIntegration
+    Properties:
+      TopicName:
+        Fn::Join:
+        - ''
+        - - Ref: AWS::StackName
+          - "-alert-topic"
+      DisplayName: "Alert Topic"
+      Subscription:
+        -
+          Endpoint:
+            !GetAtt AlertLambda.Arn
+          Protocol: "lambda"
+  AlertLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: CreateSlackIntegration
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:*
+            Resource: arn:aws:logs:*:*:*
+      - PolicyName: s3-read-only
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            Resource: arn:aws:s3:::post-slack-alert/*
+  AlertCPUAlarm1:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateSlackIntegration
+    Properties:
+      AlarmDescription: Raise alarm if CPU > 80% for 1 minute
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      AlarmActions:
+      - Ref: AlertTopic
+      InsufficientDataActions:
+      - Ref: AlertTopic
+      Period: '60'
+      EvaluationPeriods: '1'
+      Threshold: '80'
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: Group1
+      ComparisonOperator: GreaterThanThreshold
+  AlertCPUAlarm2:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateSlackIntegration
+    Properties:
+      AlarmDescription: Raise alarm if CPU > 80% for 1 minute
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      AlarmActions:
+      - Ref: AlertTopic
+      InsufficientDataActions:
+      - Ref: AlertTopic
+      Period: '60'
+      EvaluationPeriods: '1'
+      Threshold: '80'
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: Group2
+      ComparisonOperator: GreaterThanThreshold
 Outputs:
   LoadBalancerARecord:
     Description: Load balancer A Record
