@@ -22,6 +22,7 @@ Parameters:
     ConstraintDescription: CIDR range should be as narrow as possible
   DnsHostedZone:
     Type: String
+    Default: ''
     Description: The DNS name of an existing Amazon Route 53 hosted zone
   DnsRecordBastion:
     Type: String
@@ -56,6 +57,7 @@ Parameters:
   KeyName:
     Description: Existing EC2 KeyPair for SSH access to the bastion instance
     Type: AWS::EC2::KeyPair::KeyName
+    Default: ''
     ConstraintDescription: must be the name of an existing EC2 KeyPair
   WebServerPort:
     Description: TCP/IP port of the web server
@@ -89,7 +91,7 @@ Conditions:
     !Equals [!Ref DnsRecordELB, 'true']
   CreateDnsRecordBastion:
     !Equals [!Ref DnsRecordBastion, 'true']
-  CreateSlackIntegration:
+  AlertIntegrationSlack:
     !Not [!Equals [!Ref SlackHookUrl, '']]
 Resources:
   MinimalVpc:
@@ -393,11 +395,11 @@ Resources:
             - "cat > /home/ec2-user/.aws/credentials <<EOT\n"
             - "[default]\n"
             - 'aws_access_key_id = '
-            - Ref: bastionuserKey
+            - Ref: BastionUserKey
             - "\n"
             - 'aws_secret_access_key = '
             - Fn::GetAtt:
-              - bastionuserKey
+              - BastionUserKey
               - SecretAccessKey
             - "\n"
             - "EOT\n"
@@ -522,11 +524,11 @@ Resources:
             - "cat > /home/ec2-user/.aws/credentials <<EOT\n"
             - "[default]\n"
             - 'aws_access_key_id = '
-            - Ref: applicationuserKey
+            - Ref: ApplicationUserKey
             - "\n"
             - 'aws_secret_access_key = '
             - Fn::GetAtt:
-              - applicationuserKey
+              - ApplicationUserKey
               - SecretAccessKey
             - "\n"
             - "EOT\n"
@@ -780,12 +782,12 @@ Resources:
         Ref: Group2
       Cooldown: '60'
       ScalingAdjustment: "-1"
-  bastionuser:
+  BastionUser:
     Type: AWS::IAM::User
     Properties:
       Path: "/"
       Policies:
-      - PolicyName: bastionuseraccess
+      - PolicyName: BastionUserAccess
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -798,37 +800,37 @@ Resources:
           - Effect: Allow
             Action: elasticloadbalancing:DescribeInstanceHealth
             Resource: "*"
-  bastionuserKey:
+  BastionUserKey:
     Type: AWS::IAM::AccessKey
     Properties:
       Serial: '0'
       Status: Active
       UserName:
-        Ref: bastionuser
-    DependsOn: bastionuser
-  applicationuser:
+        Ref: BastionUser
+    DependsOn: BastionUser
+  ApplicationUser:
     Type: AWS::IAM::User
     Properties:
       Path: "/"
       Policies:
-      - PolicyName: applicationuseraccess
+      - PolicyName: ApplicationUserAccess
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
           - Effect: Deny
             Action: "*"
             Resource: "*"
-  applicationuserKey:
+  ApplicationUserKey:
     Type: AWS::IAM::AccessKey
     Properties:
       Serial: '0'
       Status: Active
       UserName:
-        Ref: applicationuser
-    DependsOn: applicationuser
+        Ref: ApplicationUser
+    DependsOn: ApplicationUser
   AlertLambda:
     Type: AWS::Lambda::Function
-    Condition: CreateSlackIntegration
+    Condition: AlertIntegrationSlack
     Properties:
       Description: passes subject and message pairs to a predefined Slack channel
       Handler: index.handler
@@ -844,22 +846,28 @@ Resources:
           hookUrl: !Ref SlackHookUrl
   AlertTopic:
     Type: "AWS::SNS::Topic"
-    Condition: CreateSlackIntegration
+    Condition: AlertIntegrationSlack
     Properties:
-      TopicName:
-        Fn::Join:
-        - ''
-        - - Ref: AWS::StackName
-          - "-alert-topic"
       DisplayName: "Alert Topic"
       Subscription:
         -
           Endpoint:
             !GetAtt AlertLambda.Arn
           Protocol: "lambda"
+    DependsOn:
+    - AlertLambda
+  "PermissionLambdaInvocation": {
+    "Type": "AWS::Lambda::Permission",
+    "Properties": {
+      "FunctionName": { "Fn::GetAtt" : ["AlertLambda", "Arn"] },
+      "Action": "lambda:InvokeFunction",
+      "Principal": "sns.amazonaws.com",
+      "SourceArn": { "Ref": "AlertTopic" }
+    }
+  }
   AlertLambdaExecutionRole:
     Type: AWS::IAM::Role
-    Condition: CreateSlackIntegration
+    Condition: AlertIntegrationSlack
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -890,16 +898,14 @@ Resources:
             Resource: arn:aws:s3:::post-slack-alert/*
   AlertCPUAlarm1:
     Type: AWS::CloudWatch::Alarm
-    Condition: CreateSlackIntegration
+    Condition: AlertIntegrationSlack
     Properties:
       AlarmDescription: Raise alarm if CPU > 80% for 1 minute
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
       AlarmActions:
-      - Ref: AlertTopic
-      InsufficientDataActions:
-      - Ref: AlertTopic
+      - Ref: "AlertTopic"
       Period: '60'
       EvaluationPeriods: '1'
       Threshold: '80'
@@ -908,18 +914,18 @@ Resources:
         Value:
           Ref: Group1
       ComparisonOperator: GreaterThanThreshold
+    DependsOn:
+    - AlertTopic
   AlertCPUAlarm2:
     Type: AWS::CloudWatch::Alarm
-    Condition: CreateSlackIntegration
+    Condition: AlertIntegrationSlack
     Properties:
       AlarmDescription: Raise alarm if CPU > 80% for 1 minute
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
       AlarmActions:
-      - Ref: AlertTopic
-      InsufficientDataActions:
-      - Ref: AlertTopic
+      - Ref: "AlertTopic"
       Period: '60'
       EvaluationPeriods: '1'
       Threshold: '80'
@@ -928,6 +934,8 @@ Resources:
         Value:
           Ref: Group2
       ComparisonOperator: GreaterThanThreshold
+    DependsOn:
+    - AlertTopic
 Outputs:
   LoadBalancerARecord:
     Description: Load balancer A Record
