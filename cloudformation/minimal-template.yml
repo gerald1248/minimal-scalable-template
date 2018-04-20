@@ -63,14 +63,6 @@ Parameters:
     Description: TCP/IP port of the web server
     Type: String
     Default: '80'
-  SlackChannel:
-    Description: Notification channel
-    Type: String
-    Default: ''
-  SlackHookUrl:
-    Description: Predefined hook URL
-    Type: String
-    Default: ''
 Mappings:
   RegionMap:
     eu-west-1:
@@ -91,8 +83,6 @@ Conditions:
     !Equals [!Ref DnsRecordELB, 'true']
   CreateDnsRecordBastion:
     !Equals [!Ref DnsRecordBastion, 'true']
-  AlertIntegrationSlack:
-    !Not [!Equals [!Ref SlackHookUrl, '']]
 Resources:
   MinimalVpc:
     Type: AWS::EC2::VPC
@@ -828,114 +818,6 @@ Resources:
       UserName:
         Ref: ApplicationUser
     DependsOn: ApplicationUser
-  AlertLambda:
-    Type: AWS::Lambda::Function
-    Condition: AlertIntegrationSlack
-    Properties:
-      Description: passes subject and message pairs to a predefined Slack channel
-      Handler: index.handler
-      Role: !GetAtt AlertLambdaExecutionRole.Arn
-      Code:
-        S3Bucket: post-slack-alert
-        S3Key: index.zip
-      Runtime: nodejs4.3
-      Environment:
-        Variables:
-          dryRun: false
-          slackChannel: !Ref SlackChannel
-          hookUrl: !Ref SlackHookUrl
-  AlertTopic:
-    Type: "AWS::SNS::Topic"
-    Condition: AlertIntegrationSlack
-    Properties:
-      DisplayName: "Alert Topic"
-      Subscription:
-        -
-          Endpoint:
-            !GetAtt AlertLambda.Arn
-          Protocol: "lambda"
-    DependsOn:
-    - AlertLambda
-  "PermissionLambdaInvocation": {
-    "Type": "AWS::Lambda::Permission",
-    "Properties": {
-      "FunctionName": { "Fn::GetAtt" : ["AlertLambda", "Arn"] },
-      "Action": "lambda:InvokeFunction",
-      "Principal": "sns.amazonaws.com",
-      "SourceArn": { "Ref": "AlertTopic" }
-    }
-  }
-  AlertLambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Condition: AlertIntegrationSlack
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - lambda.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      Path: "/"
-      Policies:
-      - PolicyName: root
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - logs:*
-            Resource: arn:aws:logs:*:*:*
-      - PolicyName: s3-read-only
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - s3:GetObject
-            Resource: arn:aws:s3:::post-slack-alert/*
-  AlertCPUAlarm1:
-    Type: AWS::CloudWatch::Alarm
-    Condition: AlertIntegrationSlack
-    Properties:
-      AlarmDescription: Raise alarm if CPU > 80% for 1 minute
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      AlarmActions:
-      - Ref: "AlertTopic"
-      Period: '60'
-      EvaluationPeriods: '1'
-      Threshold: '80'
-      Dimensions:
-      - Name: AutoScalingGroupName
-        Value:
-          Ref: Group1
-      ComparisonOperator: GreaterThanThreshold
-    DependsOn:
-    - AlertTopic
-  AlertCPUAlarm2:
-    Type: AWS::CloudWatch::Alarm
-    Condition: AlertIntegrationSlack
-    Properties:
-      AlarmDescription: Raise alarm if CPU > 80% for 1 minute
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      AlarmActions:
-      - Ref: "AlertTopic"
-      Period: '60'
-      EvaluationPeriods: '1'
-      Threshold: '80'
-      Dimensions:
-      - Name: AutoScalingGroupName
-        Value:
-          Ref: Group2
-      ComparisonOperator: GreaterThanThreshold
-    DependsOn:
-    - AlertTopic
 Outputs:
   LoadBalancerARecord:
     Description: Load balancer A Record
